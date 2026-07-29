@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   if (!isAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const orders = getOrders();
+  const orders = await getOrders();
   return NextResponse.json({ orders });
 }
 
@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
   }
 
-  const price = calculatePrice({ weightKg: weight, quantity: qty, packageType });
-  const trackingId = generateTrackingId();
+  const price = await calculatePrice({ weightKg: weight, quantity: qty, packageType });
+  const trackingId = await generateTrackingId();
 
   const order: Order = {
     id: randomUUID(),
