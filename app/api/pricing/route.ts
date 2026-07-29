@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "../../../lib/auth";
 import { getPricing, setPricing, PricingConfig, PACKAGE_TYPES } from "../../../lib/store";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/pricing — public, so the booking form can show a live price estimate
 export async function GET() {
   const pricing = await getPricing();
