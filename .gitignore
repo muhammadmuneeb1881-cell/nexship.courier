@@ -1,0 +1,9 @@
+node_modules
+.next
+out
+.env
+.env.local
+data/orders.json
+data/pricing.json
+data/inquiries.json
+tsconfig.tsbuildinfo

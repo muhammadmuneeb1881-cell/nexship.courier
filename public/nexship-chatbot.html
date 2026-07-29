@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NexShip AI Support</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap');
+
+  :root{
+    --base: #050505;
+    --surface: #111111;
+    --border: rgba(255,255,255,0.08);
+    --accent: #00FF88;
+    --muted: #A0A0A0;
+    --agent-bubble: #1A1A1A;
+    --user-bubble: #00FF88;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--base);
+    font-family: 'Inter', sans-serif;
+    color: #fff;
+    display:flex;
+    justify-content:center;
+    padding: 0;
+    height: 100vh;
+  }
+  .app{
+    width:100%;
+    height: 100%;
+    background: var(--surface);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  .header{
+    background: #0a0a0a;
+    padding: 16px 18px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+  }
+  .brand{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size: 20px;
+    letter-spacing: 0.2px;
+    color: #fff;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .brand .dot{
+    width:9px; height:9px; border-radius:50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,255,136,0.15);
+  }
+  .tagline{
+    font-size:11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+    margin-top:3px;
+  }
+  .status{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:11px;
+    color: var(--accent);
+  }
+  .status .pulse{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--accent);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{ opacity:0.4; }
+    50%{ opacity:1; }
+  }
+
+  .messages{
+    flex:1;
+    overflow-y:auto;
+    padding: 18px 16px;
+    display:flex;
+    flex-direction:column;
+    gap: 14px;
+  }
+  .messages::-webkit-scrollbar{ width:6px; }
+  .messages::-webkit-scrollbar-thumb{ background: var(--border); border-radius:4px; }
+
+  .row{ display:flex; flex-direction:column; max-width: 84%; }
+  .row.agent{ align-self:flex-start; align-items:flex-start; }
+  .row.user{ align-self:flex-end; align-items:flex-end; }
+
+  .bubble{
+    padding: 10px 14px;
+    font-size: 14px;
+    line-height:1.55;
+    border-radius: 14px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .row.agent .bubble{
+    background: var(--agent-bubble);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+    color: #EDEFF3;
+  }
+  .row.user .bubble{
+    background: var(--user-bubble);
+    color: #052014;
+    font-weight: 500;
+    border-bottom-right-radius: 4px;
+  }
+  .meta{
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    padding: 0 4px;
+  }
+
+  .typing{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding: 10px 14px;
+    background: var(--agent-bubble);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    border-bottom-left-radius:4px;
+    width: fit-content;
+  }
+  .typing-dots{ display:flex; gap:4px; }
+  .typing-dots span{
+    width:6px; height:6px; border-radius:50%;
+    background: var(--accent);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2){ animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3){ animation-delay: 0.3s; }
+  @keyframes bounce{
+    0%,80%,100%{ transform: translateY(0); opacity:0.5; }
+    40%{ transform: translateY(-4px); opacity:1; }
+  }
+
+  .composer{
+    display:flex;
+    gap:8px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    background: #0a0a0a;
+  }
+  .composer input{
+    flex:1;
+    background: var(--base);
+    border: 1px solid var(--border);
+    color: #fff;
+    border-radius: 10px;
+    padding: 11px 13px;
+    font-size: 14px;
+    font-family:'Inter', sans-serif;
+    outline:none;
+  }
+  .composer input:focus{
+    border-color: rgba(0,255,136,0.4);
+  }
+  .composer input::placeholder{ color: var(--muted); }
+  .composer button{
+    background: var(--accent);
+    border:none;
+    color:#052014;
+    font-weight:600;
+    font-size: 13px;
+    padding: 0 18px;
+    border-radius: 10px;
+    cursor:pointer;
+    font-family:'Space Grotesk', sans-serif;
+    letter-spacing:0.3px;
+  }
+  .composer button:disabled{
+    opacity:0.5;
+    cursor:not-allowed;
+  }
+  .composer button:active{ transform: scale(0.97); }
+
+  .quick-replies{
+    display:flex;
+    gap:6px;
+    padding: 0 14px 10px;
+    flex-wrap:wrap;
+    background: #0a0a0a;
+  }
+  .quick-replies button{
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11.5px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    cursor:pointer;
+    font-family:'Inter', sans-serif;
+  }
+  .quick-replies button:hover{
+    border-color: rgba(0,255,136,0.4);
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="brand"><span class="dot"></span>NexShip</div>
+        <div class="tagline">Courier &amp; Logistics Support · Karachi</div>
+      </div>
+      <div class="status"><span class="pulse"></span>Online</div>
+    </div>
+  </div>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="quick-replies">
+    <button data-q="Delivery charges kitni hain?">Pricing</button>
+    <button data-q="Mera parcel track karna hai">Track parcel</button>
+    <button data-q="Aap kis city mein deliver karte hain?">Coverage</button>
+    <button data-q="Delivery book kaise karni hai?">Book delivery</button>
+  </div>
+
+  <div class="composer">
+    <input type="text" id="userInput" placeholder="Apna message likhein..." autocomplete="off">
+    <button id="sendBtn">Send</button>
+  </div>
+</div>
+
+<script>
+// Ye HTML NexShip website ke andar /nexship-chatbot.html se serve hota hai
+// (iframe ke through), isliye relative path se hi backend API route mil jayega.
+const BACKEND_URL = '/api/chat';
+
+let history = [];
+
+const messagesEl = document.getElementById('messages');
+const inputEl = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+
+function timeStamp(){
+  const d = new Date();
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+
+function addBubble(role, text){
+  const row = document.createElement('div');
+  row.className = 'row ' + (role === 'user' ? 'user' : 'agent');
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  meta.textContent = (role === 'user' ? 'You' : 'NexShip AI') + ' · ' + timeStamp();
+  row.appendChild(meta);
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function showTyping(){
+  const row = document.createElement('div');
+  row.className = 'row agent';
+  row.id = 'typingRow';
+  row.innerHTML = `
+    <div class="typing">
+      <div class="typing-dots"><span></span><span></span><span></span></div>
+    </div>`;
+  messagesEl.appendChild(row);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function hideTyping(){
+  const row = document.getElementById('typingRow');
+  if(row) row.remove();
+}
+
+async function sendMessage(text){
+  if(!text.trim()) return;
+  addBubble('user', text);
+  history.push({ role: 'user', content: text });
+  inputEl.value = '';
+  sendBtn.disabled = true;
+  showTyping();
+
+  try{
+    const response = await fetch(BACKEND_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: history })
+    });
+    const data = await response.json();
+    hideTyping();
+
+    let replyText = data && data.reply ? data.reply : '';
+    if(!replyText){
+      replyText = "I'm sorry, I don't have that information right now. Please contact our support team at nexship.courier@gmail.com for further assistance.";
+    }
+    addBubble('agent', replyText);
+    history.push({ role: 'assistant', content: replyText });
+  }catch(err){
+    hideTyping();
+    addBubble('agent', "Maazrat, connection mein masla hai. Please thori dair baad dobara koshish karein, ya nexship.courier@gmail.com par contact karein.");
+  }finally{
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+}
+
+sendBtn.addEventListener('click', () => sendMessage(inputEl.value));
+inputEl.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') sendMessage(inputEl.value);
+});
+document.querySelectorAll('.quick-replies button').forEach(btn => {
+  btn.addEventListener('click', () => sendMessage(btn.getAttribute('data-q')));
+});
+
+addBubble('agent', "Assalam-o-Alaikum! 📦 Main NexShip AI hoon, aapki delivery, tracking, pricing ya booking se related kisi bhi query mein madad ke liye yahan hoon. Kaise madad karoon?");
+</script>
+
+</body>
+</html>
