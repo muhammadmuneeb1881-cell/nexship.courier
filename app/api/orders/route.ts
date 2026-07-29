@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { requireAdmin } from "../../../lib/auth";
 import { addOrder, calculatePrice, generateTrackingId, getOrders, Order, PACKAGE_TYPES } from "../../../lib/store";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/orders — admin only, returns every order (newest first)
 export async function GET(req: NextRequest) {
   const isAdmin = await requireAdmin(req);
