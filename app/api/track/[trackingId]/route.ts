@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findOrderByTrackingId } from "../../../../lib/store";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/track/NS-XXXXXX — public, used by the customer-facing tracking page.
 // Only non-sensitive fields are returned (no phone numbers).
 export async function GET(
