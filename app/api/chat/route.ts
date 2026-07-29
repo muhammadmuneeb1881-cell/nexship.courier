@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Live pricing (always fresh from the store, admin can change rates) ---
-    const pricing = getPricing();
+    const pricing = await getPricing();
     const pricingSection = `\n=== LIVE PRICING RATES (use these exact numbers, in PKR) ===\nBase fee: Rs ${pricing.baseFee}\nPer kg rate: Rs ${pricing.perKgRate} per kg (multiplied by weight and quantity)\nExtra fee by package type (multiplied by quantity):\n${Object.entries(
       pricing.packageTypeExtra
     )
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     if (lastUserMsg) {
       const trackingId = extractTrackingId(String(lastUserMsg.content || ""));
       if (trackingId) {
-        const order = findOrderByTrackingId(trackingId);
+        const order = await findOrderByTrackingId(trackingId);
         if (order) {
           trackingSection = `\n=== LIVE TRACKING DATA for ${trackingId} (use this exact info) ===\nStatus: ${order.status}\nBooked on: ${order.createdAt}\nPackage type: ${order.packageType}\nWeight: ${order.weightKg} kg\nQuantity: ${order.quantity}\nDelivery city: ${order.deliveryCity}\nDelivery address: ${order.deliveryAddress}\nReceiver: ${order.receiverName}\nPrice: Rs ${order.price}\n`;
         } else {
