@@ -18,21 +18,27 @@ export async function GET(
   const order = await findOrderByTrackingId(trackingId);
 
   if (!order) {
-    return NextResponse.json({ error: "No order found with this tracking ID." }, { status: 404 });
+    return NextResponse.json(
+      { error: "No order found with this tracking ID." },
+      { status: 404, headers: { "Cache-Control": "no-store, max-age=0" } }
+    );
   }
 
-  return NextResponse.json({
-    order: {
-      trackingId: order.trackingId,
-      status: order.status,
-      createdAt: order.createdAt,
-      packageType: order.packageType,
-      weightKg: order.weightKg,
-      quantity: order.quantity,
-      deliveryCity: order.deliveryCity,
-      deliveryAddress: order.deliveryAddress,
-      receiverName: order.receiverName,
-      price: order.price,
+  return NextResponse.json(
+    {
+      order: {
+        trackingId: order.trackingId,
+        status: order.status,
+        createdAt: order.createdAt,
+        packageType: order.packageType,
+        weightKg: order.weightKg,
+        quantity: order.quantity,
+        deliveryCity: order.deliveryCity,
+        deliveryAddress: order.deliveryAddress,
+        receiverName: order.receiverName,
+        price: order.price,
+      },
     },
-  });
+    { headers: { "Cache-Control": "no-store, max-age=0" } }
+  );
 }
