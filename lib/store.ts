@@ -1,10 +1,4 @@
-import fs from "fs";
-import path from "path";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const ORDERS_FILE = path.join(DATA_DIR, "orders.json");
-const PRICING_FILE = path.join(DATA_DIR, "pricing.json");
-const INQUIRIES_FILE = path.join(DATA_DIR, "inquiries.json");
+import { getSupabaseAdminClient } from "./supabase";
 
 export type OrderStatus = "Pending" | "Picked Up" | "In Transit" | "Delivered" | "Cancelled";
 
@@ -62,35 +56,100 @@ const DEFAULT_PRICING: PricingConfig = {
   updatedAt: new Date().toISOString(),
 };
 
-function ensureDataFiles() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(ORDERS_FILE)) fs.writeFileSync(ORDERS_FILE, "[]", "utf-8");
-  if (!fs.existsSync(INQUIRIES_FILE)) fs.writeFileSync(INQUIRIES_FILE, "[]", "utf-8");
-  if (!fs.existsSync(PRICING_FILE)) {
-    fs.writeFileSync(PRICING_FILE, JSON.stringify(DEFAULT_PRICING, null, 2), "utf-8");
-  }
+// ---- row <-> app object mappers ----
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToOrder(row: any): Order {
+  return {
+    id: row.id,
+    trackingId: row.tracking_id,
+    createdAt: row.created_at,
+    senderName: row.sender_name,
+    senderPhone: row.sender_phone,
+    pickupAddress: row.pickup_address,
+    receiverName: row.receiver_name,
+    receiverPhone: row.receiver_phone,
+    deliveryCity: row.delivery_city,
+    deliveryAddress: row.delivery_address,
+    packageType: row.package_type,
+    weightKg: Number(row.weight_kg),
+    quantity: Number(row.quantity),
+    price: Number(row.price),
+    status: row.status,
+  };
 }
 
-// Simple in-process write queue so concurrent requests don't corrupt the JSON files.
-let writeChain: Promise<unknown> = Promise.resolve();
-function queueWrite<T>(fn: () => T): Promise<T> {
-  const result = writeChain.then(fn, fn);
-  writeChain = result.catch(() => undefined);
-  return result;
+function orderToRow(order: Order) {
+  return {
+    id: order.id,
+    tracking_id: order.trackingId,
+    created_at: order.createdAt,
+    sender_name: order.senderName,
+    sender_phone: order.senderPhone,
+    pickup_address: order.pickupAddress,
+    receiver_name: order.receiverName,
+    receiver_phone: order.receiverPhone,
+    delivery_city: order.deliveryCity,
+    delivery_address: order.deliveryAddress,
+    package_type: order.packageType,
+    weight_kg: order.weightKg,
+    quantity: order.quantity,
+    price: order.price,
+    status: order.status,
+  };
 }
 
-export function getOrders(): Order[] {
-  ensureDataFiles();
-  try {
-    const raw = fs.readFileSync(ORDERS_FILE, "utf-8");
-    return JSON.parse(raw) as Order[];
-  } catch {
-    return [];
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToInquiry(row: any): Inquiry {
+  return {
+    id: row.id,
+    createdAt: row.created_at,
+    plan: row.plan,
+    name: row.name,
+    phone: row.phone,
+    email: row.email || "",
+    message: row.message || "",
+    status: row.status,
+    emailSent: row.email_sent,
+  };
 }
 
-// Generates a random, unique tracking ID like "NS-7K2F9Q".
-// Excludes visually-ambiguous characters (0/O, 1/I/L) so customers can read it out easily.
+function inquiryToRow(inquiry: Inquiry) {
+  return {
+    id: inquiry.id,
+    created_at: inquiry.createdAt,
+    plan: inquiry.plan,
+    name: inquiry.name,
+    phone: inquiry.phone,
+    email: inquiry.email,
+    message: inquiry.message,
+    status: inquiry.status,
+    email_sent: inquiry.emailSent,
+  };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToPricing(row: any): PricingConfig {
+  return {
+    baseFee: Number(row.base_fee),
+    perKgRate: Number(row.per_kg_rate),
+    packageTypeExtra: row.package_type_extra || DEFAULT_PRICING.packageTypeExtra,
+    updatedAt: row.updated_at,
+  };
+}
+
+// ---- ORDERS ----
+
+export async function getOrders(): Promise<Order[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToOrder);
+}
+
 const TRACKING_ID_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
 function randomTrackingSuffix(length = 6): string {
@@ -101,123 +160,147 @@ function randomTrackingSuffix(length = 6): string {
   return out;
 }
 
-export function generateTrackingId(): string {
-  const existing = new Set(getOrders().map((o) => o.trackingId));
+export async function generateTrackingId(): Promise<string> {
+  const supabase = getSupabaseAdminClient();
   let candidate = `NS-${randomTrackingSuffix()}`;
-  while (existing.has(candidate)) {
+  // Retry until we find one that isn't already taken.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const { data, error } = await supabase
+      .from("orders")
+      .select("id")
+      .eq("tracking_id", candidate)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return candidate;
     candidate = `NS-${randomTrackingSuffix()}`;
   }
   return candidate;
 }
 
-export function findOrderByTrackingId(trackingId: string): Order | null {
+export async function findOrderByTrackingId(trackingId: string): Promise<Order | null> {
+  const supabase = getSupabaseAdminClient();
   const normalized = trackingId.trim().toUpperCase();
-  const orders = getOrders();
-  return orders.find((o) => o.trackingId.toUpperCase() === normalized) || null;
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .ilike("tracking_id", normalized)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToOrder(data) : null;
 }
 
-export function addOrder(order: Order): Promise<Order> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    const orders = getOrders();
-    orders.unshift(order);
-    fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2), "utf-8");
-    return order;
-  });
+export async function addOrder(order: Order): Promise<Order> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .insert(orderToRow(order))
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToOrder(data);
 }
 
-export function updateOrderStatus(id: string, status: OrderStatus): Promise<Order | null> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    const orders = getOrders();
-    const idx = orders.findIndex((o) => o.id === id);
-    if (idx === -1) return null;
-    orders[idx] = { ...orders[idx], status };
-    fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2), "utf-8");
-    return orders[idx];
-  });
+export async function updateOrderStatus(id: string, status: OrderStatus): Promise<Order | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .update({ status })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToOrder(data) : null;
 }
 
-export function deleteOrder(id: string): Promise<boolean> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    const orders = getOrders();
-    const next = orders.filter((o) => o.id !== id);
-    const changed = next.length !== orders.length;
-    if (changed) fs.writeFileSync(ORDERS_FILE, JSON.stringify(next, null, 2), "utf-8");
-    return changed;
-  });
+export async function deleteOrder(id: string): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  const { error, count } = await supabase
+    .from("orders")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) throw error;
+  return (count || 0) > 0;
 }
 
-export function getPricing(): PricingConfig {
-  ensureDataFiles();
-  try {
-    const raw = fs.readFileSync(PRICING_FILE, "utf-8");
-    return JSON.parse(raw) as PricingConfig;
-  } catch {
-    return DEFAULT_PRICING;
-  }
+// ---- PRICING ----
+
+export async function getPricing(): Promise<PricingConfig> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase.from("pricing").select("*").eq("id", 1).maybeSingle();
+  if (error) throw error;
+  return data ? rowToPricing(data) : DEFAULT_PRICING;
 }
 
-export function setPricing(config: PricingConfig): Promise<PricingConfig> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    fs.writeFileSync(PRICING_FILE, JSON.stringify(config, null, 2), "utf-8");
-    return config;
-  });
+export async function setPricing(config: PricingConfig): Promise<PricingConfig> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("pricing")
+    .upsert({
+      id: 1,
+      base_fee: config.baseFee,
+      per_kg_rate: config.perKgRate,
+      package_type_extra: config.packageTypeExtra,
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToPricing(data);
 }
 
-export function calculatePrice(params: {
+export async function calculatePrice(params: {
   weightKg: number;
   quantity: number;
   packageType: string;
-}): number {
-  const pricing = getPricing();
+}): Promise<number> {
+  const pricing = await getPricing();
   const extra = pricing.packageTypeExtra[params.packageType] ?? 0;
   const total =
     pricing.baseFee + pricing.perKgRate * params.weightKg * params.quantity + extra * params.quantity;
   return Math.round(total);
 }
 
-export function getInquiries(): Inquiry[] {
-  ensureDataFiles();
-  try {
-    const raw = fs.readFileSync(INQUIRIES_FILE, "utf-8");
-    return JSON.parse(raw) as Inquiry[];
-  } catch {
-    return [];
-  }
+// ---- INQUIRIES ----
+
+export async function getInquiries(): Promise<Inquiry[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToInquiry);
 }
 
-export function addInquiry(inquiry: Inquiry): Promise<Inquiry> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    const inquiries = getInquiries();
-    inquiries.unshift(inquiry);
-    fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(inquiries, null, 2), "utf-8");
-    return inquiry;
-  });
+export async function addInquiry(inquiry: Inquiry): Promise<Inquiry> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .insert(inquiryToRow(inquiry))
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToInquiry(data);
 }
 
-export function updateInquiryStatus(id: string, status: InquiryStatus): Promise<Inquiry | null> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    const inquiries = getInquiries();
-    const idx = inquiries.findIndex((i) => i.id === id);
-    if (idx === -1) return null;
-    inquiries[idx] = { ...inquiries[idx], status };
-    fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(inquiries, null, 2), "utf-8");
-    return inquiries[idx];
-  });
+export async function updateInquiryStatus(id: string, status: InquiryStatus): Promise<Inquiry | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("inquiries")
+    .update({ status })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToInquiry(data) : null;
 }
 
-export function deleteInquiry(id: string): Promise<boolean> {
-  ensureDataFiles();
-  return queueWrite(() => {
-    const inquiries = getInquiries();
-    const next = inquiries.filter((i) => i.id !== id);
-    const changed = next.length !== inquiries.length;
-    if (changed) fs.writeFileSync(INQUIRIES_FILE, JSON.stringify(next, null, 2), "utf-8");
-    return changed;
-  });
+export async function deleteInquiry(id: string): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  const { error, count } = await supabase
+    .from("inquiries")
+    .delete({ count: "exact" })
+    .eq("id", id);
+  if (error) throw error;
+  return (count || 0) > 0;
 }
