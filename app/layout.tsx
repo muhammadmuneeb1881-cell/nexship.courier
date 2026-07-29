@@ -2,21 +2,18 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
 import ChatWidget from "../components/ChatWidget";
-
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
   variable: "--font-space-grotesk",
   display: "swap",
 });
-
 const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
   variable: "--font-inter",
   display: "swap",
 });
-
 export const metadata: Metadata = {
   title: {
     default: "NexShip | Premium Courier & Logistics in Karachi, Pakistan",
@@ -51,8 +48,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  verification: {
+    google: "bmpFV10w0TM2PUk2bbDn8Uq8sbeGgPpis4iFPZrigZQ",
+  },
 };
-
 export default function RootLayout({
   children,
 }: {
