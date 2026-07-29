@@ -13,7 +13,7 @@ export async function GET(
     return NextResponse.json({ error: "Tracking ID is required" }, { status: 400 });
   }
 
-  const order = findOrderByTrackingId(trackingId);
+  const order = await findOrderByTrackingId(trackingId);
 
   if (!order) {
     return NextResponse.json({ error: "No order found with this tracking ID." }, { status: 404 });
