@@ -70,7 +70,7 @@ export default function TrackClient() {
     setError(null);
     setOrder(null);
     try {
-      const res = await fetch(`/api/track/${encodeURIComponent(id)}`);
+      const res = await fetch(`/api/track/${encodeURIComponent(id)}`, { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "No order found with this tracking ID.");
