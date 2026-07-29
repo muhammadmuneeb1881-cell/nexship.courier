@@ -89,9 +89,9 @@ export default function AdminDashboard() {
     setError(null);
     try {
       const [ordersRes, inquiriesRes, pricingRes] = await Promise.all([
-        fetch("/api/orders"),
-        fetch("/api/inquiries"),
-        fetch("/api/pricing"),
+        fetch("/api/orders", { cache: "no-store" }),
+        fetch("/api/inquiries", { cache: "no-store" }),
+        fetch("/api/pricing", { cache: "no-store" }),
       ]);
 
       if (ordersRes.status === 401 || inquiriesRes.status === 401 || pricingRes.status === 401) {
