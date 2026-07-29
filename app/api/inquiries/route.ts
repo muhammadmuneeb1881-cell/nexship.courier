@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   if (!isAdmin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const inquiries = getInquiries();
+  const inquiries = await getInquiries();
   return NextResponse.json({ inquiries });
 }
 
