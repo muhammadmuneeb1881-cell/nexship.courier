@@ -4,6 +4,8 @@ import { requireAdmin } from "../../../lib/auth";
 import { addInquiry, getInquiries, Inquiry } from "../../../lib/store";
 import { sendInquiryEmail } from "../../../lib/mailer";
 
+export const dynamic = "force-dynamic";
+
 // GET /api/inquiries — admin only, returns every inquiry (newest first)
 export async function GET(req: NextRequest) {
   const isAdmin = await requireAdmin(req);
