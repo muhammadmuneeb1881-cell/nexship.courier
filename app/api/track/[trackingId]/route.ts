@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { findOrderByTrackingId } from "../../../../lib/store";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 // GET /api/track/NS-XXXXXX — public, used by the customer-facing tracking page.
 // Only non-sensitive fields are returned (no phone numbers).
