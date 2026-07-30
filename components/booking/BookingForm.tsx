@@ -344,7 +344,7 @@ export default function BookingForm() {
                       Save this ID to track your order anytime.
                     </p>
                   </div>
-                  
+                  <a
                     href={`/track?id=${encodeURIComponent(trackingId)}`}
                     className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-body text-xs font-semibold text-accent transition-colors hover:bg-accent/20"
                   >
