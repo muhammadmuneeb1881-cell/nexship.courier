@@ -512,11 +512,17 @@ function PricingTab({
   pricing: PricingConfig;
   onSaved: (p: PricingConfig) => void;
 }) {
-  const [baseFee, setBaseFee] = useState(pricing.baseFee);
   const [perKgRate, setPerKgRate] = useState(pricing.perKgRate);
-  const [extras, setExtras] = useState<Record<string, number>>(pricing.packageTypeExtra);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Base fee and per-package-type extras are locked to 0 so every shipment is
+  // priced as a flat "Rs X per kg" amount, regardless of package type.
+  const LOCKED_BASE_FEE = 0;
+  const LOCKED_PACKAGE_EXTRA: Record<string, number> = PACKAGE_TYPES.reduce(
+    (acc, type) => ({ ...acc, [type]: 0 }),
+    {}
+  );
 
   const handleSave = async () => {
     setSaving(true);
@@ -525,7 +531,11 @@ function PricingTab({
       const res = await fetch("/api/pricing", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseFee, perKgRate, packageTypeExtra: extras }),
+        body: JSON.stringify({
+          baseFee: LOCKED_BASE_FEE,
+          perKgRate,
+          packageTypeExtra: LOCKED_PACKAGE_EXTRA,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -541,38 +551,28 @@ function PricingTab({
     }
   };
 
-  // Live preview for a 2kg, qty 1 Parcel shipment
-  const previewWeight = 2;
-  const previewType = "Parcel";
-  const preview = Math.round(baseFee + perKgRate * previewWeight + (extras[previewType] || 0));
+  // Live preview for a 1kg, qty 1 shipment (same for every package type,
+  // since base fee and package-type extras are locked to 0).
+  const previewWeight = 1;
+  const preview = Math.round(perKgRate * previewWeight);
 
   return (
     <div className="mt-6 max-w-2xl">
       <div className="rounded-2xl border border-border bg-white/[0.04] p-6">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wider text-muted">
-          Base Rates
+          Base Rate
         </h3>
+        <p className="mt-1 font-body text-xs text-muted">
+          Every shipment is priced as a flat rate per kg — no base fee, no extra
+          fee for package type. Documents, Parcel, Fragile, Electronics, and
+          Food all cost the same per kg.
+        </p>
         <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <NumberField label="Base Fee (Rs, flat per order)" value={baseFee} onChange={setBaseFee} />
           <NumberField label="Rate per KG (Rs)" value={perKgRate} onChange={setPerKgRate} />
         </div>
 
-        <h3 className="mt-8 font-display text-sm font-semibold uppercase tracking-wider text-muted">
-          Extra Fee by Package Type (Rs, per item)
-        </h3>
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          {PACKAGE_TYPES.map((type) => (
-            <NumberField
-              key={type}
-              label={type}
-              value={extras[type] ?? 0}
-              onChange={(v) => setExtras((prev) => ({ ...prev, [type]: v }))}
-            />
-          ))}
-        </div>
-
         <div className="mt-6 rounded-xl border border-accent/25 bg-accent/[0.06] px-4 py-3 font-body text-xs text-white/90">
-          Example: a 2kg <span className="text-accent">Parcel</span>, qty 1 would currently cost{" "}
+          Example: a 1kg shipment of any package type would currently cost{" "}
           <span className="font-semibold text-accent">Rs {preview.toLocaleString()}</span>
         </div>
 
