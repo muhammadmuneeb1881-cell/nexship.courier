@@ -79,7 +79,7 @@ export default function InquiryModal({
             exit={{ opacity: 0, y: 12, scale: 0.97 }}
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-3xl border border-border bg-[#0a0a0a] p-8 shadow-[0_30px_80px_-15px_rgba(0,0,0,0.7)]"
+            className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-border bg-[#0a0a0a] p-6 shadow-[0_30px_80px_-15px_rgba(0,0,0,0.7)] sm:p-8"
           >
             <button
               type="button"
