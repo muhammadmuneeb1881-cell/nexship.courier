@@ -44,14 +44,14 @@ export interface Inquiry {
 export const PACKAGE_TYPES = ["Documents", "Parcel", "Fragile", "Electronics", "Food"];
 
 const DEFAULT_PRICING: PricingConfig = {
-  baseFee: 150,
-  perKgRate: 60,
+  baseFee: 0,
+  perKgRate: 250,
   packageTypeExtra: {
     Documents: 0,
-    Parcel: 50,
-    Fragile: 150,
-    Electronics: 200,
-    Food: 100,
+    Parcel: 0,
+    Fragile: 0,
+    Electronics: 0,
+    Food: 0,
   },
   updatedAt: new Date().toISOString(),
 };
