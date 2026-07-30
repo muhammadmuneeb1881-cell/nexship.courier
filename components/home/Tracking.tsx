@@ -162,7 +162,7 @@ export default function Tracking() {
               <Button type="submit">Track Now</Button>
             </form>
 
-            <div className="mt-12 grid grid-cols-3 gap-4 border-t border-border pt-8">
+            <div className="mt-12 grid grid-cols-1 gap-5 border-t border-border pt-8 xs:grid-cols-3 sm:gap-4">
               {STATS.map((s, i) => (
                 <motion.div
                   key={s.label}
@@ -170,14 +170,17 @@ export default function Tracking() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, delay: i * 0.1 }}
+                  className="flex items-center gap-3 xs:block"
                 >
-                  <s.icon className="h-4 w-4 text-accent" strokeWidth={1.75} />
-                  <p className="mt-3 font-display text-xl font-bold text-white">
-                    {s.value}
-                  </p>
-                  <p className="mt-1 font-body text-[11px] leading-4 text-muted">
-                    {s.label}
-                  </p>
+                  <s.icon className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
+                  <div className="xs:mt-3">
+                    <p className="font-display text-xl font-bold text-white">
+                      {s.value}
+                    </p>
+                    <p className="mt-0.5 font-body text-[11px] leading-4 text-muted xs:mt-1">
+                      {s.label}
+                    </p>
+                  </div>
                 </motion.div>
               ))}
             </div>
