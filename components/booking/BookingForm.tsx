@@ -142,7 +142,7 @@ export default function BookingForm() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="mx-auto mt-14 max-w-3xl rounded-3xl border border-border bg-white/[0.04] p-8 backdrop-blur-xl sm:p-10"
+            className="mx-auto mt-14 max-w-3xl rounded-3xl border border-border bg-white/[0.04] p-5 backdrop-blur-xl sm:p-10"
           >
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-accent/[0.06] px-5 py-3.5">
               <p className="font-body text-xs leading-5 text-white/90 sm:text-sm">
@@ -344,7 +344,7 @@ export default function BookingForm() {
                       Save this ID to track your order anytime.
                     </p>
                   </div>
-                  <a
+                  
                     href={`/track?id=${encodeURIComponent(trackingId)}`}
                     className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-body text-xs font-semibold text-accent transition-colors hover:bg-accent/20"
                   >
