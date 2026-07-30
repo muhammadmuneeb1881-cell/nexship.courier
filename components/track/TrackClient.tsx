@@ -170,7 +170,7 @@ export default function TrackClient() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                className="mx-auto mt-10 max-w-2xl rounded-3xl border border-border bg-white/[0.04] p-8 backdrop-blur-xl sm:p-10"
+                className="mx-auto mt-10 max-w-2xl rounded-3xl border border-border bg-white/[0.04] p-5 backdrop-blur-xl sm:p-10"
               >
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -239,7 +239,7 @@ export default function TrackClient() {
                               <step.icon className="h-3.5 w-3.5" strokeWidth={2} />
                             </div>
                             <p
-                              className={`font-body text-[11px] font-medium ${
+                              className={`max-w-[64px] text-center font-body text-[10px] font-medium leading-tight sm:max-w-none sm:text-[11px] ${
                                 done ? "text-white" : "text-muted"
                               }`}
                             >
