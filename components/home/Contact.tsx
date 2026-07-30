@@ -137,7 +137,7 @@ export default function Contact() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="rounded-3xl border border-border bg-white/[0.04] p-8 backdrop-blur-xl lg:col-span-2"
+            className="rounded-3xl border border-border bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8 lg:col-span-2"
           >
             <h3 className="font-display text-lg font-semibold text-white">
               Contact Details
@@ -178,7 +178,7 @@ export default function Contact() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-80px" }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-            className="rounded-3xl border border-border bg-white/[0.04] p-8 backdrop-blur-xl lg:col-span-3"
+            className="rounded-3xl border border-border bg-white/[0.04] p-6 backdrop-blur-xl sm:p-8 lg:col-span-3"
           >
             <div className="grid gap-5 sm:grid-cols-2">
               {FIELDS.map((f) => (
