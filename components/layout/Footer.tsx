@@ -65,7 +65,7 @@ export default function Footer() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-80px" }}
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          className="flex flex-col items-center gap-6 rounded-3xl border border-border bg-white/[0.04] px-8 py-12 text-center backdrop-blur-xl sm:px-16"
+          className="flex flex-col items-center gap-6 rounded-3xl border border-border bg-white/[0.04] px-5 py-10 text-center backdrop-blur-xl sm:px-16 sm:py-12"
         >
           <h3 className="font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
             Stay ahead of your{" "}
@@ -120,7 +120,7 @@ export default function Footer() {
               Pakistan&apos;s premium courier and logistics platform —
               delivering trust, speed and precision, starting in Karachi.
             </p>
-            <a
+            
               href="mailto:nexship.courier@gmail.com"
               className="mt-4 inline-flex items-center gap-2 font-body text-sm text-muted transition-colors duration-300 hover:text-accent"
             >
@@ -129,7 +129,7 @@ export default function Footer() {
             </a>
             <div className="mt-6 flex gap-3">
               {SOCIALS.map(({ icon: Icon, href, label }) => (
-                <a
+                
                   key={label}
                   href={href}
                   target="_blank"
@@ -151,7 +151,7 @@ export default function Footer() {
               <ul className="mt-5 space-y-3">
                 {group.links.map((link) => (
                   <li key={link.label}>
-                    <a
+                    
                       href={link.href}
                       className="group inline-flex items-center gap-1.5 font-body text-sm text-muted transition-colors duration-300 hover:text-white"
                     >
@@ -172,7 +172,7 @@ export default function Footer() {
             <ul className="mt-5 space-y-3">
               {CITIES.slice(0, 5).map((city) => (
                 <li key={city.slug} className="flex items-center justify-between gap-2">
-                  <a
+                  
                     href="/coverage"
                     className="font-body text-sm text-muted transition-colors duration-300 hover:text-white"
                   >
@@ -182,7 +182,7 @@ export default function Footer() {
                 </li>
               ))}
             </ul>
-            <a
+            
               href="/coverage"
               className="group mt-4 inline-flex items-center gap-1.5 font-body text-xs font-medium text-accent transition-colors duration-300 hover:text-emerald-300"
             >
