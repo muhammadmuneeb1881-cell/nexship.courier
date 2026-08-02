@@ -160,6 +160,76 @@ export async function sendOrderNotificationEmail(order: Order): Promise<boolean>
   }
 }
 
+/**
+ * Sends a booking confirmation email to the CUSTOMER (order.senderEmail)
+ * every time they place a new order through the booking form. Returns true
+ * if sent, false otherwise (e.g. SMTP not configured or no email on the
+ * order). Never throws — a failed email must never block the order from
+ * being saved.
+ */
+export async function sendOrderConfirmationEmail(order: Order): Promise<boolean> {
+  if (!order.senderEmail || !order.senderEmail.trim()) {
+    return false;
+  }
+
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn(
+      "[mailer] SMTP not configured — skipping customer confirmation email. Order was still saved."
+    );
+    return false;
+  }
+
+  const parcelDetails = `${order.packageType} — ${order.weightKg}kg × ${order.quantity}`;
+  const placedAt = new Date(order.createdAt).toLocaleString();
+
+  try {
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: order.senderEmail,
+      replyTo: ADMIN_EMAIL,
+      subject: `Booking Confirmed — ${order.trackingId} | NexShip Courier`,
+      text: [
+        `Hi ${order.senderName},`,
+        ``,
+        `Thanks for booking with NexShip! Your order has been received and is being processed.`,
+        ``,
+        `Tracking ID: ${order.trackingId}`,
+        `Pickup Address: ${order.pickupAddress}`,
+        `Receiver: ${order.receiverName} (${order.receiverPhone})`,
+        `Delivery Address: ${order.deliveryAddress} (${order.deliveryCity})`,
+        `Parcel Details: ${parcelDetails}`,
+        `COD Amount: PKR ${order.price}`,
+        `Date & Time: ${placedAt}`,
+        ``,
+        `You can track your order anytime using the Tracking ID above on our website.`,
+        ``,
+        `— NexShip Courier`,
+      ].join("\n"),
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: auto;">
+          <h2 style="color:#0a0a0a;">Booking Confirmed 🎉</h2>
+          <p style="font-size:14px; color:#333;">Hi ${escapeHtml(order.senderName)}, thanks for booking with NexShip! Your order has been received and is being processed.</p>
+          <table style="width:100%; border-collapse: collapse; font-size: 14px; margin-top:12px;">
+            <tr><td style="padding:6px 0; color:#666;">Tracking ID</td><td style="padding:6px 0;"><b style="color:#00A86B;">${escapeHtml(order.trackingId)}</b></td></tr>
+            <tr><td style="padding:6px 0; color:#666; vertical-align:top;">Pickup Address</td><td style="padding:6px 0;">${escapeHtml(order.pickupAddress)}</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Receiver</td><td style="padding:6px 0;">${escapeHtml(order.receiverName)} (${escapeHtml(order.receiverPhone)})</td></tr>
+            <tr><td style="padding:6px 0; color:#666; vertical-align:top;">Delivery Address</td><td style="padding:6px 0;">${escapeHtml(order.deliveryAddress)} (${escapeHtml(order.deliveryCity)})</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Parcel Details</td><td style="padding:6px 0;">${escapeHtml(parcelDetails)}</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">COD Amount</td><td style="padding:6px 0;"><b style="color:#D60000;">PKR ${order.price}</b></td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Date &amp; Time</td><td style="padding:6px 0;">${escapeHtml(placedAt)}</td></tr>
+          </table>
+          <p style="color:#999; font-size:12px; margin-top:16px;">Save this Tracking ID to check your delivery status anytime on our website.</p>
+        </div>
+      `,
+    });
+    return true;
+  } catch (err) {
+    console.error("[mailer] Failed to send customer confirmation email:", err);
+    return false;
+  }
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
