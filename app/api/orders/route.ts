@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireAdmin } from "../../../lib/auth";
 import { addOrder, calculatePrice, generateTrackingId, getOrders, Order, PACKAGE_TYPES } from "../../../lib/store";
+import { sendOrderNotificationEmail } from "../../../lib/mailer";
+import { sendOrderWhatsAppNotification } from "../../../lib/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +90,16 @@ export async function POST(req: NextRequest) {
   };
 
   await addOrder(order);
+
+  // Notify the admin. Both helpers catch their own errors and resolve to
+  // false rather than throwing, so a failed email/WhatsApp send never
+  // blocks the order response. They're awaited (not fire-and-forget)
+  // because serverless functions can be frozen/terminated right after the
+  // response is returned, which would silently drop un-awaited work.
+  await Promise.all([
+    sendOrderNotificationEmail(order),
+    sendOrderWhatsAppNotification(order),
+  ]);
 
   return NextResponse.json({ order }, { status: 201 });
 }
