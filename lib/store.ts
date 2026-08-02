@@ -8,6 +8,7 @@ export interface Order {
   createdAt: string;
   senderName: string;
   senderPhone: string;
+  senderEmail: string;
   pickupAddress: string;
   receiverName: string;
   receiverPhone: string;
@@ -66,6 +67,7 @@ function rowToOrder(row: any): Order {
     createdAt: row.created_at,
     senderName: row.sender_name,
     senderPhone: row.sender_phone,
+    senderEmail: row.sender_email || "",
     pickupAddress: row.pickup_address,
     receiverName: row.receiver_name,
     receiverPhone: row.receiver_phone,
@@ -86,6 +88,7 @@ function orderToRow(order: Order) {
     created_at: order.createdAt,
     sender_name: order.senderName,
     sender_phone: order.senderPhone,
+    sender_email: order.senderEmail,
     pickup_address: order.pickupAddress,
     receiver_name: order.receiverName,
     receiver_phone: order.receiverPhone,
