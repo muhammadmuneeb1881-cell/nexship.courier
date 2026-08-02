@@ -15,6 +15,7 @@ import { CITIES, LIVE_CITY } from "../../lib/cities";
 interface FormState {
   senderName: string;
   senderPhone: string;
+  senderEmail: string;
   pickupAddress: string;
   receiverName: string;
   receiverPhone: string;
@@ -34,6 +35,7 @@ interface PricingConfig {
 const INITIAL: FormState = {
   senderName: "",
   senderPhone: "",
+  senderEmail: "",
   pickupAddress: "",
   receiverName: "",
   receiverPhone: "",
@@ -168,6 +170,15 @@ export default function BookingForm() {
                 value={values.senderPhone}
                 onChange={(v) => update("senderPhone", v)}
               />
+              <div className="sm:col-span-2">
+                <FloatingField
+                  id="senderEmail"
+                  label="Email Address"
+                  type="email"
+                  value={values.senderEmail}
+                  onChange={(v) => update("senderEmail", v)}
+                />
+              </div>
               <div className="sm:col-span-2">
                 <FloatingField
                   id="pickupAddress"
