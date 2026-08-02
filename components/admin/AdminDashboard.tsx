@@ -19,6 +19,7 @@ interface Order {
   createdAt: string;
   senderName: string;
   senderPhone: string;
+  senderEmail: string;
   pickupAddress: string;
   receiverName: string;
   receiverPhone: string;
@@ -170,6 +171,7 @@ export default function AdminDashboard() {
         o.senderName.toLowerCase().includes(q) ||
         o.receiverName.toLowerCase().includes(q) ||
         o.senderPhone.includes(q) ||
+        (o.senderEmail || "").toLowerCase().includes(q) ||
         o.receiverPhone.includes(q) ||
         o.deliveryCity.toLowerCase().includes(q) ||
         o.trackingId.toLowerCase().includes(q) ||
@@ -362,6 +364,7 @@ function OrdersTab({
                   <td className="px-4 py-3 font-body text-xs text-white">
                     <div className="font-medium">{o.senderName}</div>
                     <div className="text-muted">{o.senderPhone}</div>
+                    {o.senderEmail && <div className="text-muted">{o.senderEmail}</div>}
                   </td>
                   <td className="max-w-[180px] px-4 py-3 font-body text-xs text-muted">{o.pickupAddress}</td>
                   <td className="px-4 py-3 font-body text-xs text-white">
