@@ -11,7 +11,7 @@ import InquiryModal from "../shared/InquiryModal";
 const PLANS = [
   {
     name: "Starter",
-    price: "Rs 299",
+    price: "Rs 340",
     period: "/ shipment",
     desc: "For individuals & small sellers shipping occasionally.",
     features: ["Up to 50 shipments/mo", "Standard delivery (2-3 days)", "Basic tracking", "Email support"],
@@ -19,13 +19,13 @@ const PLANS = [
   },
   {
     name: "Business",
-    price: "Rs 249",
+    price: "Rs 299",
     period: "/ shipment",
     desc: "For growing businesses with regular shipping needs.",
     features: [
       "Up to 1,000 shipments/mo",
       "Express delivery (same/next day)",
-      "Real-time GPS tracking",
+      "Real-time tracking",
       "Priority support",
     ],
     featured: true,
@@ -39,7 +39,6 @@ const PLANS = [
       "Unlimited shipments",
       "Dedicated fleet & fulfilment",
       "Custom SLAs",
-      "Dedicated account manager",
       "24/7 phone support",
     ],
     featured: false,
