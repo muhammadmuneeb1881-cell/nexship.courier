@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireAdmin } from "../../../lib/auth";
 import { addOrder, calculatePrice, generateTrackingId, getOrders, Order, PACKAGE_TYPES } from "../../../lib/store";
-import { sendOrderNotificationEmail } from "../../../lib/mailer";
+import { sendOrderNotificationEmail, sendOrderConfirmationEmail } from "../../../lib/mailer";
 import { sendOrderWhatsAppNotification } from "../../../lib/whatsapp";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
   const {
     senderName,
     senderPhone,
+    senderEmail,
     pickupAddress,
     receiverName,
     receiverPhone,
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
   const requiredStrings = {
     senderName,
     senderPhone,
+    senderEmail,
     pickupAddress,
     receiverName,
     receiverPhone,
@@ -52,6 +54,11 @@ export async function POST(req: NextRequest) {
     if (typeof value !== "string" || !value.trim()) {
       return NextResponse.json({ error: `Missing or invalid field: ${key}` }, { status: 400 });
     }
+  }
+
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!EMAIL_REGEX.test(senderEmail.trim())) {
+    return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
   }
 
   if (!PACKAGE_TYPES.includes(packageType)) {
@@ -77,6 +84,7 @@ export async function POST(req: NextRequest) {
     createdAt: new Date().toISOString(),
     senderName: senderName.trim(),
     senderPhone: senderPhone.trim(),
+    senderEmail: senderEmail.trim(),
     pickupAddress: pickupAddress.trim(),
     receiverName: receiverName.trim(),
     receiverPhone: receiverPhone.trim(),
@@ -98,6 +106,7 @@ export async function POST(req: NextRequest) {
   // response is returned, which would silently drop un-awaited work.
   await Promise.all([
     sendOrderNotificationEmail(order),
+    sendOrderConfirmationEmail(order),
     sendOrderWhatsAppNotification(order),
   ]);
 
