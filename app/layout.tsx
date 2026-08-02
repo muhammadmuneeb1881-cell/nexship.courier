@@ -1,7 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
-import ChatWidget from "../components/ChatWidget";
+import WhatsAppButton from "../components/WhatsAppButton";
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
@@ -61,7 +61,7 @@ export default function RootLayout({
     <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
       <body>
         {children}
-        <ChatWidget />
+        <WhatsAppButton />
       </body>
     </html>
   );
