@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { requireAdmin } from "../../../lib/auth";
-import { addOrder, calculatePrice, generateTrackingId, getOrders, Order, PACKAGE_TYPES } from "../../../lib/store";
+import { requireAdmin, requireMerchant } from "../../../lib/auth";
+import {
+  addOrder,
+  calculatePrice,
+  createNotification,
+  generateTrackingId,
+  getOrders,
+  Order,
+  PACKAGE_TYPES,
+} from "../../../lib/store";
 import { sendOrderNotificationEmail, sendOrderConfirmationEmail } from "../../../lib/mailer";
 import { sendOrderWhatsAppNotification } from "../../../lib/whatsapp";
 
@@ -17,7 +25,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ orders });
 }
 
-// POST /api/orders — public, called from the website's booking form
+// POST /api/orders — public booking form. If a merchant is logged in
+// (merchant session cookie present), the order is automatically tagged
+// with their merchantId so it shows up on their own dashboard.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) {
@@ -78,6 +88,11 @@ export async function POST(req: NextRequest) {
   const price = await calculatePrice({ weightKg: weight, quantity: qty, packageType });
   const trackingId = await generateTrackingId();
 
+  // A merchant session (from /merchant login) automatically attaches the
+  // order to that merchant's account — the public booking form itself
+  // stays unchanged for walk-in / non-merchant customers.
+  const merchantSession = await requireMerchant(req);
+
   const order: Order = {
     id: randomUUID(),
     trackingId,
@@ -95,6 +110,10 @@ export async function POST(req: NextRequest) {
     quantity: qty,
     price,
     status: "Pending",
+    merchantId: merchantSession?.merchantId || null,
+    codStatus: "Pending",
+    codCollectedAt: null,
+    codRemittedAt: null,
   };
 
   await addOrder(order);
@@ -109,6 +128,16 @@ export async function POST(req: NextRequest) {
     sendOrderConfirmationEmail(order),
     sendOrderWhatsAppNotification(order),
   ]);
+
+  if (order.merchantId) {
+    await createNotification({
+      recipientType: "merchant",
+      merchantId: order.merchantId,
+      category: "order",
+      title: `Order booked — ${order.trackingId}`,
+      message: `Your shipment to ${order.receiverName} (${order.deliveryCity}) has been booked.`,
+    }).catch(() => null);
+  }
 
   return NextResponse.json({ order }, { status: 201 });
 }
