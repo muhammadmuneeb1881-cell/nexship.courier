@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE_NAME, verifySessionToken } from "./lib/auth";
+import { SESSION_COOKIE_NAME, verifySessionToken, MERCHANT_SESSION_COOKIE_NAME, verifyRoleSessionToken } from "./lib/auth";
 
 export async function middleware(req: NextRequest) {
-  // Let the login page itself through, otherwise every route under /admin
-  // requires a valid session cookie.
+  // Let the login pages themselves through.
   if (req.nextUrl.pathname.startsWith("/admin/login")) {
+    return NextResponse.next();
+  }
+  if (req.nextUrl.pathname.startsWith("/merchant/login")) {
+    return NextResponse.next();
+  }
+
+  if (req.nextUrl.pathname.startsWith("/merchant")) {
+    const token = req.cookies.get(MERCHANT_SESSION_COOKIE_NAME)?.value;
+    const payload = await verifyRoleSessionToken(token);
+    if (!payload || payload.role !== "merchant") {
+      const loginUrl = new URL("/merchant/login", req.url);
+      return NextResponse.redirect(loginUrl);
+    }
     return NextResponse.next();
   }
 
@@ -20,5 +32,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/merchant/:path*"],
 };
