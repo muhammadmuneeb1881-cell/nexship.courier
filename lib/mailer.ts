@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import type { Inquiry, Order } from "./store";
+import type { Inquiry, Order, SupportTicket } from "./store";
 
 const ADMIN_EMAIL = process.env.EMAIL_TO || "nexship.courier@gmail.com";
 
@@ -226,6 +226,55 @@ export async function sendOrderConfirmationEmail(order: Order): Promise<boolean>
     return true;
   } catch (err) {
     console.error("[mailer] Failed to send customer confirmation email:", err);
+    return false;
+  }
+}
+
+/**
+ * Sends a notification email to the support inbox whenever someone submits
+ * a support ticket (Support Center → Create Ticket). Never blocks ticket
+ * creation — the ticket is always saved to the database regardless of
+ * whether this email succeeds.
+ */
+export async function sendSupportTicketEmail(ticket: SupportTicket): Promise<boolean> {
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn("[mailer] SMTP not configured — skipping support ticket email. Ticket was still saved.");
+    return false;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: ADMIN_EMAIL,
+      replyTo: ticket.email,
+      subject: `New Support Ticket — ${ticket.subject}`,
+      text: [
+        `New support ticket submitted on the NexShip website.`,
+        ``,
+        `From: ${ticket.name} <${ticket.email}>`,
+        `Phone: ${ticket.phone || "—"}`,
+        `Subject: ${ticket.subject}`,
+        `Message: ${ticket.message}`,
+        ``,
+        `Submitted: ${new Date(ticket.createdAt).toLocaleString()}`,
+      ].join("\n"),
+      html: `
+        <div style="font-family: sans-serif; max-width: 480px; margin: auto;">
+          <h2 style="color:#0a0a0a;">New Support Ticket</h2>
+          <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+            <tr><td style="padding:6px 0; color:#666;">From</td><td style="padding:6px 0;"><b>${escapeHtml(ticket.name)}</b> (${escapeHtml(ticket.email)})</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Phone</td><td style="padding:6px 0;">${escapeHtml(ticket.phone || "—")}</td></tr>
+            <tr><td style="padding:6px 0; color:#666;">Subject</td><td style="padding:6px 0;">${escapeHtml(ticket.subject)}</td></tr>
+            <tr><td style="padding:6px 0; color:#666; vertical-align:top;">Message</td><td style="padding:6px 0;">${escapeHtml(ticket.message)}</td></tr>
+          </table>
+          <p style="color:#999; font-size:12px; margin-top:16px;">Submitted ${new Date(ticket.createdAt).toLocaleString()}</p>
+        </div>
+      `,
+    });
+    return true;
+  } catch (err) {
+    console.error("[mailer] Failed to send support ticket email:", err);
     return false;
   }
 }
