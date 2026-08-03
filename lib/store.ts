@@ -19,7 +19,13 @@ export interface Order {
   quantity: number;
   price: number;
   status: OrderStatus;
+  merchantId: string | null;
+  codStatus: CodStatus;
+  codCollectedAt: string | null;
+  codRemittedAt: string | null;
 }
+
+export type CodStatus = "Pending" | "Collected" | "Remitted";
 
 export interface PricingConfig {
   baseFee: number;
@@ -78,6 +84,10 @@ function rowToOrder(row: any): Order {
     quantity: Number(row.quantity),
     price: Number(row.price),
     status: row.status,
+    merchantId: row.merchant_id ?? null,
+    codStatus: (row.cod_status as CodStatus) ?? "Pending",
+    codCollectedAt: row.cod_collected_at ?? null,
+    codRemittedAt: row.cod_remitted_at ?? null,
   };
 }
 
@@ -99,6 +109,10 @@ function orderToRow(order: Order) {
     quantity: order.quantity,
     price: order.price,
     status: order.status,
+    merchant_id: order.merchantId,
+    cod_status: order.codStatus,
+    cod_collected_at: order.codCollectedAt,
+    cod_remitted_at: order.codRemittedAt,
   };
 }
 
@@ -306,4 +320,576 @@ export async function deleteInquiry(id: string): Promise<boolean> {
     .eq("id", id);
   if (error) throw error;
   return (count || 0) > 0;
+}
+
+// ---- COD ----
+
+export async function updateOrderCod(
+  id: string,
+  codStatus: CodStatus
+): Promise<Order | null> {
+  const supabase = getSupabaseAdminClient();
+  const patch: Record<string, unknown> = { cod_status: codStatus };
+  if (codStatus === "Collected") patch.cod_collected_at = new Date().toISOString();
+  if (codStatus === "Remitted") patch.cod_remitted_at = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("orders")
+    .update(patch)
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToOrder(data) : null;
+}
+
+export async function getOrdersByMerchant(merchantId: string): Promise<Order[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .eq("merchant_id", merchantId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToOrder);
+}
+
+export async function getOrderById(id: string): Promise<Order | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase.from("orders").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? rowToOrder(data) : null;
+}
+
+// ============================================================
+// MERCHANTS
+// ============================================================
+
+export type MerchantStatus = "Active" | "Suspended";
+
+export interface Merchant {
+  id: string;
+  companyName: string;
+  ownerName: string;
+  phone: string;
+  email: string;
+  ntn: string | null;
+  strn: string | null;
+  pickupAddress: string | null;
+  passwordHash: string;
+  status: MerchantStatus;
+  createdAt: string;
+  lastLoginAt: string | null;
+}
+
+export type MerchantPublic = Omit<Merchant, "passwordHash">;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToMerchant(row: any): Merchant {
+  return {
+    id: row.id,
+    companyName: row.company_name,
+    ownerName: row.owner_name,
+    phone: row.phone,
+    email: row.email,
+    ntn: row.ntn ?? null,
+    strn: row.strn ?? null,
+    pickupAddress: row.pickup_address ?? null,
+    passwordHash: row.password_hash,
+    status: row.status,
+    createdAt: row.created_at,
+    lastLoginAt: row.last_login_at ?? null,
+  };
+}
+
+export function toMerchantPublic(m: Merchant): MerchantPublic {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { passwordHash, ...rest } = m;
+  return rest;
+}
+
+export async function getMerchants(): Promise<Merchant[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("merchants")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToMerchant);
+}
+
+export async function getMerchantById(id: string): Promise<Merchant | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase.from("merchants").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? rowToMerchant(data) : null;
+}
+
+export async function getMerchantByEmail(email: string): Promise<Merchant | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("merchants")
+    .select("*")
+    .ilike("email", email.trim())
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToMerchant(data) : null;
+}
+
+export async function createMerchant(input: {
+  companyName: string;
+  ownerName: string;
+  phone: string;
+  email: string;
+  ntn?: string;
+  strn?: string;
+  pickupAddress?: string;
+  passwordHash: string;
+}): Promise<Merchant> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("merchants")
+    .insert({
+      company_name: input.companyName,
+      owner_name: input.ownerName,
+      phone: input.phone,
+      email: input.email.trim().toLowerCase(),
+      ntn: input.ntn || null,
+      strn: input.strn || null,
+      pickup_address: input.pickupAddress || null,
+      password_hash: input.passwordHash,
+      status: "Active",
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToMerchant(data);
+}
+
+export async function updateMerchantStatus(
+  id: string,
+  status: MerchantStatus
+): Promise<Merchant | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("merchants")
+    .update({ status })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToMerchant(data) : null;
+}
+
+export async function updateMerchantPassword(
+  id: string,
+  passwordHash: string
+): Promise<Merchant | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("merchants")
+    .update({ password_hash: passwordHash })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToMerchant(data) : null;
+}
+
+export async function touchMerchantLogin(id: string): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  await supabase.from("merchants").update({ last_login_at: new Date().toISOString() }).eq("id", id);
+}
+
+export async function deleteMerchant(id: string): Promise<boolean> {
+  const supabase = getSupabaseAdminClient();
+  const { error, count } = await supabase.from("merchants").delete({ count: "exact" }).eq("id", id);
+  if (error) throw error;
+  return (count || 0) > 0;
+}
+
+// ============================================================
+// RETURNS
+// ============================================================
+
+export type ReturnStatus =
+  | "Requested"
+  | "Approved"
+  | "In Transit"
+  | "Received"
+  | "Refunded"
+  | "Rejected";
+
+export interface ReturnTimelineEntry {
+  status: string;
+  note?: string;
+  at: string;
+}
+
+export interface ReturnRecord {
+  id: string;
+  orderId: string;
+  merchantId: string | null;
+  reason: string;
+  status: ReturnStatus;
+  redeliveryRequested: boolean;
+  redeliveryAddress: string | null;
+  timeline: ReturnTimelineEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToReturn(row: any): ReturnRecord {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    merchantId: row.merchant_id ?? null,
+    reason: row.reason,
+    status: row.status,
+    redeliveryRequested: row.redelivery_requested,
+    redeliveryAddress: row.redelivery_address ?? null,
+    timeline: row.timeline || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function getReturns(merchantId?: string): Promise<ReturnRecord[]> {
+  const supabase = getSupabaseAdminClient();
+  let query = supabase.from("returns").select("*").order("created_at", { ascending: false });
+  if (merchantId) query = query.eq("merchant_id", merchantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(rowToReturn);
+}
+
+export async function createReturn(input: {
+  orderId: string;
+  merchantId: string | null;
+  reason: string;
+  redeliveryRequested: boolean;
+  redeliveryAddress?: string;
+}): Promise<ReturnRecord> {
+  const supabase = getSupabaseAdminClient();
+  const timeline: ReturnTimelineEntry[] = [
+    { status: "Requested", note: "Return requested", at: new Date().toISOString() },
+  ];
+  const { data, error } = await supabase
+    .from("returns")
+    .insert({
+      order_id: input.orderId,
+      merchant_id: input.merchantId,
+      reason: input.reason,
+      status: "Requested",
+      redelivery_requested: input.redeliveryRequested,
+      redelivery_address: input.redeliveryAddress || null,
+      timeline,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToReturn(data);
+}
+
+export async function updateReturnStatus(
+  id: string,
+  status: ReturnStatus,
+  note?: string
+): Promise<ReturnRecord | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data: existing, error: fetchErr } = await supabase
+    .from("returns")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  if (!existing) return null;
+
+  const timeline: ReturnTimelineEntry[] = [
+    ...(existing.timeline || []),
+    { status, note, at: new Date().toISOString() },
+  ];
+
+  const { data, error } = await supabase
+    .from("returns")
+    .update({ status, timeline, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToReturn(data) : null;
+}
+
+export async function setReturnRedelivery(
+  id: string,
+  redeliveryAddress: string
+): Promise<ReturnRecord | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data: existing, error: fetchErr } = await supabase
+    .from("returns")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (fetchErr) throw fetchErr;
+  if (!existing) return null;
+
+  const timeline: ReturnTimelineEntry[] = [
+    ...(existing.timeline || []),
+    { status: existing.status, note: "Redelivery requested", at: new Date().toISOString() },
+  ];
+
+  const { data, error } = await supabase
+    .from("returns")
+    .update({
+      redelivery_requested: true,
+      redelivery_address: redeliveryAddress,
+      timeline,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToReturn(data) : null;
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+export type NotificationCategory = "order" | "pickup" | "cod" | "system";
+export type NotificationRecipient = "admin" | "merchant";
+
+export interface AppNotification {
+  id: string;
+  recipientType: NotificationRecipient;
+  merchantId: string | null;
+  category: NotificationCategory;
+  title: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToNotification(row: any): AppNotification {
+  return {
+    id: row.id,
+    recipientType: row.recipient_type,
+    merchantId: row.merchant_id ?? null,
+    category: row.category,
+    title: row.title,
+    message: row.message,
+    read: row.read,
+    createdAt: row.created_at,
+  };
+}
+
+export async function createNotification(input: {
+  recipientType: NotificationRecipient;
+  merchantId?: string | null;
+  category: NotificationCategory;
+  title: string;
+  message: string;
+}): Promise<AppNotification> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .insert({
+      recipient_type: input.recipientType,
+      merchant_id: input.merchantId || null,
+      category: input.category,
+      title: input.title,
+      message: input.message,
+      read: false,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToNotification(data);
+}
+
+export async function getNotifications(
+  recipient: { role: "admin" } | { role: "merchant"; merchantId: string }
+): Promise<AppNotification[]> {
+  const supabase = getSupabaseAdminClient();
+  let query = supabase
+    .from("notifications")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  query =
+    recipient.role === "admin"
+      ? query.eq("recipient_type", "admin")
+      : query.eq("recipient_type", "merchant").eq("merchant_id", recipient.merchantId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).map(rowToNotification);
+}
+
+export async function markNotificationRead(id: string): Promise<AppNotification | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToNotification(data) : null;
+}
+
+export async function markAllNotificationsRead(
+  recipient: { role: "admin" } | { role: "merchant"; merchantId: string }
+): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  let query = supabase.from("notifications").update({ read: true });
+  query =
+    recipient.role === "admin"
+      ? query.eq("recipient_type", "admin")
+      : query.eq("recipient_type", "merchant").eq("merchant_id", recipient.merchantId);
+  const { error } = await query;
+  if (error) throw error;
+}
+
+// ============================================================
+// SUPPORT TICKETS (replaces the old AI chat widget)
+// ============================================================
+
+export type TicketStatus = "Open" | "In Progress" | "Closed";
+
+export interface SupportTicket {
+  id: string;
+  merchantId: string | null;
+  name: string;
+  email: string;
+  phone: string | null;
+  subject: string;
+  message: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToTicket(row: any): SupportTicket {
+  return {
+    id: row.id,
+    merchantId: row.merchant_id ?? null,
+    name: row.name,
+    email: row.email,
+    phone: row.phone ?? null,
+    subject: row.subject,
+    message: row.message,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function createSupportTicket(input: {
+  merchantId?: string | null;
+  name: string;
+  email: string;
+  phone?: string;
+  subject: string;
+  message: string;
+}): Promise<SupportTicket> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .insert({
+      merchant_id: input.merchantId || null,
+      name: input.name,
+      email: input.email,
+      phone: input.phone || null,
+      subject: input.subject,
+      message: input.message,
+      status: "Open",
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return rowToTicket(data);
+}
+
+export async function getSupportTickets(): Promise<SupportTicket[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data || []).map(rowToTicket);
+}
+
+export async function updateSupportTicketStatus(
+  id: string,
+  status: TicketStatus
+): Promise<SupportTicket | null> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("support_tickets")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  return data ? rowToTicket(data) : null;
+}
+
+// ============================================================
+// AUDIT LOGS
+// ============================================================
+
+export interface AuditLog {
+  id: string;
+  actorType: "admin" | "merchant";
+  actorLabel: string;
+  action: string;
+  target: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToAuditLog(row: any): AuditLog {
+  return {
+    id: row.id,
+    actorType: row.actor_type,
+    actorLabel: row.actor_label,
+    action: row.action,
+    target: row.target ?? null,
+    details: row.details ?? null,
+    createdAt: row.created_at,
+  };
+}
+
+export async function writeAuditLog(input: {
+  actorType: "admin" | "merchant";
+  actorLabel: string;
+  action: string;
+  target?: string;
+  details?: Record<string, unknown>;
+}): Promise<void> {
+  const supabase = getSupabaseAdminClient();
+  const { error } = await supabase.from("audit_logs").insert({
+    actor_type: input.actorType,
+    actor_label: input.actorLabel,
+    action: input.action,
+    target: input.target || null,
+    details: input.details || null,
+  });
+  if (error) console.error("[audit_logs] failed to write:", error.message);
+}
+
+export async function getAuditLogs(limit = 200): Promise<AuditLog[]> {
+  const supabase = getSupabaseAdminClient();
+  const { data, error } = await supabase
+    .from("audit_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return (data || []).map(rowToAuditLog);
 }
