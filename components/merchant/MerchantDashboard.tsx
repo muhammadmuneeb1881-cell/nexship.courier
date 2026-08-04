@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, RefreshCw, Package, Bell, Undo2, X } from "lucide-react";
+import { LogOut, RefreshCw, Package, Bell, Undo2, X, UploadCloud, MapPin } from "lucide-react";
 
 type OrderStatus = "Pending" | "Picked Up" | "In Transit" | "Delivered" | "Cancelled";
 type CodStatus = "Pending" | "Collected" | "Remitted";
@@ -115,6 +115,12 @@ export default function MerchantDashboard() {
             >
               + New Order
             </a>
+            <a
+              href="/merchant/bulk-booking"
+              className="flex items-center gap-2 rounded-xl border border-border bg-white/[0.04] px-4 py-2.5 font-body text-sm text-white transition-colors hover:border-white/20"
+            >
+              <UploadCloud className="h-4 w-4" strokeWidth={1.75} /> Bulk Booking
+            </a>
             <div className="relative">
               <button
                 onClick={() => setShowNotifications((v) => !v)}
@@ -169,7 +175,7 @@ export default function MerchantDashboard() {
           <table className="min-w-full divide-y divide-border">
             <thead>
               <tr className="bg-white/[0.03]">
-                {["Tracking ID", "Date", "Receiver", "City", "Package", "Price", "Status", "COD", ""].map((h) => (
+                {["Tracking ID", "Date", "Receiver", "City", "Package", "Price", "Status", "COD", "Track", ""].map((h) => (
                   <th key={h} className="whitespace-nowrap px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wider text-muted">
                     {h}
                   </th>
@@ -179,7 +185,7 @@ export default function MerchantDashboard() {
             <tbody className="divide-y divide-border">
               {orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center font-body text-sm text-muted">
+                  <td colSpan={10} className="px-4 py-10 text-center font-body text-sm text-muted">
                     <Package className="mx-auto mb-2 h-6 w-6 text-muted" strokeWidth={1.5} />
                     No orders yet.
                   </td>
@@ -206,6 +212,16 @@ export default function MerchantDashboard() {
                       </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.codStatus}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <a
+                        href={`/track?id=${encodeURIComponent(o.trackingId)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1.5 rounded-lg border border-accent/25 bg-accent/[0.06] px-2.5 py-1.5 font-body text-[11px] text-accent transition-colors hover:bg-accent/[0.12]"
+                      >
+                        <MapPin className="h-3.5 w-3.5" strokeWidth={1.75} /> Live Status
+                      </a>
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {o.status === "Delivered" && (
                         <button
