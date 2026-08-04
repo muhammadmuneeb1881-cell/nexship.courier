@@ -91,7 +91,14 @@ export async function POST(req: NextRequest) {
   // A merchant session (from /merchant login) automatically attaches the
   // order to that merchant's account — the public booking form itself
   // stays unchanged for walk-in / non-merchant customers.
+  const rawCookieHeader = req.headers.get("cookie") || "";
   const merchantSession = await requireMerchant(req);
+
+  // ---- TEMPORARY DEBUG LOGGING (remove after diagnosing) ----
+  console.log("[ORDER DEBUG] has cookie header:", rawCookieHeader.length > 0);
+  console.log("[ORDER DEBUG] cookie names present:", rawCookieHeader.split(";").map((c) => c.trim().split("=")[0]));
+  console.log("[ORDER DEBUG] merchantSession resolved:", merchantSession);
+  // -------------------------------------------------------------
 
   const order: Order = {
     id: randomUUID(),
