@@ -1,8 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, RefreshCw, Package, Bell, Undo2, X, UploadCloud, MapPin } from "lucide-react";
+import {
+  LogOut,
+  RefreshCw,
+  Package,
+  Bell,
+  Undo2,
+  X,
+  UploadCloud,
+  MapPin,
+  ClipboardList,
+  Wallet,
+  Search,
+  Download,
+} from "lucide-react";
+import { openSlip } from "../../lib/slip";
 
 type OrderStatus = "Pending" | "Picked Up" | "In Transit" | "Delivered" | "Cancelled";
 type CodStatus = "Pending" | "Collected" | "Remitted";
@@ -11,11 +25,19 @@ interface Order {
   id: string;
   trackingId: string;
   createdAt: string;
+  senderName: string;
+  senderPhone: string;
+  pickupAddress: string;
   receiverName: string;
   receiverPhone: string;
   deliveryCity: string;
   deliveryAddress: string;
   packageType: string;
+  weightKg: number;
+  quantity: number;
+  deliveryCharges: number;
+  parcelValue: number;
+  isCod: boolean;
   price: number;
   status: OrderStatus;
   codStatus: CodStatus;
@@ -45,6 +67,18 @@ const STATUS_STYLES: Record<OrderStatus, string> = {
   Cancelled: "bg-red-400/10 text-red-300 border-red-400/25",
 };
 
+const COD_STYLES: Record<CodStatus, string> = {
+  Pending: "bg-amber-400/10 text-amber-300 border-amber-400/25",
+  Collected: "bg-sky-400/10 text-sky-300 border-sky-400/25",
+  Remitted: "bg-accent/10 text-accent border-accent/25",
+};
+
+const STATUSES: OrderStatus[] = ["Pending", "Picked Up", "In Transit", "Delivered", "Cancelled"];
+const COD_STATUSES: CodStatus[] = ["Pending", "Collected", "Remitted"];
+
+type Tab = "orders" | "cod";
+type DeliveryTypeFilter = "All" | "COD" | "Normal";
+
 export default function MerchantDashboard() {
   const router = useRouter();
   const [merchant, setMerchant] = useState<Merchant | null>(null);
@@ -53,6 +87,63 @@ export default function MerchantDashboard() {
   const [loading, setLoading] = useState(true);
   const [returnFor, setReturnFor] = useState<Order | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [tab, setTab] = useState<Tab>("orders");
+
+  // ---- filters (shared by both the Orders and COD tabs) ----
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"All" | OrderStatus>("All");
+  const [codFilter, setCodFilter] = useState<"All" | CodStatus>("All");
+  const [typeFilter, setTypeFilter] = useState<DeliveryTypeFilter>("All");
+
+  const filteredOrders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return orders.filter((o) => {
+      if (statusFilter !== "All" && o.status !== statusFilter) return false;
+      if (codFilter !== "All" && o.codStatus !== codFilter) return false;
+      if (typeFilter === "COD" && !o.isCod) return false;
+      if (typeFilter === "Normal" && o.isCod) return false;
+      if (q) {
+        const haystack = `${o.trackingId} ${o.receiverName} ${o.receiverPhone} ${o.deliveryCity}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [orders, search, statusFilter, codFilter, typeFilter]);
+
+  const totals = useMemo(() => {
+    const totalAmount = filteredOrders.reduce((sum, o) => sum + o.price, 0);
+    const codPending = filteredOrders
+      .filter((o) => o.isCod && o.codStatus === "Pending")
+      .reduce((sum, o) => sum + o.price, 0);
+    const codCollected = filteredOrders
+      .filter((o) => o.isCod && o.codStatus === "Collected")
+      .reduce((sum, o) => sum + o.price, 0);
+    const codRemitted = filteredOrders
+      .filter((o) => o.isCod && o.codStatus === "Remitted")
+      .reduce((sum, o) => sum + o.price, 0);
+    return { totalAmount, codPending, codCollected, codRemitted };
+  }, [filteredOrders]);
+
+  const handleSlip = (o: Order) => {
+    openSlip({
+      trackingId: o.trackingId,
+      createdAt: o.createdAt,
+      senderName: o.senderName,
+      senderPhone: o.senderPhone,
+      pickupAddress: o.pickupAddress,
+      receiverName: o.receiverName,
+      receiverPhone: o.receiverPhone,
+      deliveryCity: o.deliveryCity,
+      deliveryAddress: o.deliveryAddress,
+      packageType: o.packageType,
+      weightKg: o.weightKg,
+      quantity: o.quantity,
+      deliveryCharges: o.deliveryCharges,
+      parcelValue: o.parcelValue,
+      isCod: o.isCod,
+      price: o.price,
+    });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -171,11 +262,75 @@ export default function MerchantDashboard() {
           </div>
         </header>
 
-        <div className="mt-8 overflow-x-auto rounded-2xl border border-border">
+        <div className="mt-8 flex gap-2 border-b border-border">
+          <TabButton active={tab === "orders"} onClick={() => setTab("orders")} icon={<ClipboardList className="h-4 w-4" strokeWidth={1.75} />}>
+            Orders ({orders.length})
+          </TabButton>
+          <TabButton active={tab === "cod"} onClick={() => setTab("cod")} icon={<Wallet className="h-4 w-4" strokeWidth={1.75} />}>
+            COD Tracker
+          </TabButton>
+        </div>
+
+        {/* ---- Summary cards ---- */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-4">
+          <SummaryCard label="Total Amount" value={`Rs ${totals.totalAmount.toLocaleString()}`} />
+          <SummaryCard label="COD Pending" value={`Rs ${totals.codPending.toLocaleString()}`} />
+          <SummaryCard label="COD Collected" value={`Rs ${totals.codCollected.toLocaleString()}`} />
+          <SummaryCard label="COD Remitted" value={`Rs ${totals.codRemitted.toLocaleString()}`} />
+        </div>
+
+        {/* ---- Filters ---- */}
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" strokeWidth={1.75} />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by tracking ID, receiver, city..."
+              className="w-full rounded-xl border border-border bg-white/[0.04] py-2.5 pl-10 pr-4 font-body text-sm text-white outline-none focus:border-accent/40"
+            />
+          </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as DeliveryTypeFilter)}
+            className="rounded-xl border border-border bg-white/[0.04] px-4 py-2.5 font-body text-sm text-white outline-none focus:border-accent/40"
+          >
+            <option value="All" className="bg-[#0a0a0a]">All Types</option>
+            <option value="COD" className="bg-[#0a0a0a]">COD</option>
+            <option value="Normal" className="bg-[#0a0a0a]">Normal (Prepaid)</option>
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as "All" | OrderStatus)}
+            className="rounded-xl border border-border bg-white/[0.04] px-4 py-2.5 font-body text-sm text-white outline-none focus:border-accent/40"
+          >
+            <option value="All" className="bg-[#0a0a0a]">All Statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s} className="bg-[#0a0a0a]">{s}</option>
+            ))}
+          </select>
+          {tab === "cod" && (
+            <select
+              value={codFilter}
+              onChange={(e) => setCodFilter(e.target.value as "All" | CodStatus)}
+              className="rounded-xl border border-border bg-white/[0.04] px-4 py-2.5 font-body text-sm text-white outline-none focus:border-accent/40"
+            >
+              <option value="All" className="bg-[#0a0a0a]">All COD Statuses</option>
+              {COD_STATUSES.map((s) => (
+                <option key={s} value={s} className="bg-[#0a0a0a]">{s}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div className="mt-5 overflow-x-auto rounded-2xl border border-border">
           <table className="min-w-full divide-y divide-border">
             <thead>
               <tr className="bg-white/[0.03]">
-                {["Tracking ID", "Date", "Receiver", "City", "Package", "Price", "Status", "COD", "Track", ""].map((h) => (
+                {(tab === "orders"
+                  ? ["Tracking ID", "Date", "Receiver", "City", "Package", "Type", "Amount", "Status", "COD", "Track", "Slip", ""]
+                  : ["Tracking ID", "Receiver", "Type", "Delivery Charges", "COD Amount", "Total", "Order Status", "COD Status", "Slip"]
+                ).map((h) => (
                   <th key={h} className="whitespace-nowrap px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wider text-muted">
                     {h}
                   </th>
@@ -183,15 +338,15 @@ export default function MerchantDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {orders.length === 0 ? (
+              {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center font-body text-sm text-muted">
+                  <td colSpan={12} className="px-4 py-10 text-center font-body text-sm text-muted">
                     <Package className="mx-auto mb-2 h-6 w-6 text-muted" strokeWidth={1.5} />
-                    No orders yet.
+                    No orders found.
                   </td>
                 </tr>
-              ) : (
-                orders.map((o) => (
+              ) : tab === "orders" ? (
+                filteredOrders.map((o) => (
                   <tr key={o.id} className="hover:bg-white/[0.02]">
                     <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-accent">{o.trackingId}</td>
                     <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">
@@ -203,6 +358,9 @@ export default function MerchantDashboard() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.deliveryCity}</td>
                     <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.packageType}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <DeliveryTypeBadge isCod={o.isCod} />
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-white">
                       Rs {o.price.toLocaleString()}
                     </td>
@@ -211,7 +369,15 @@ export default function MerchantDashboard() {
                         {o.status}
                       </span>
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.codStatus}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {o.isCod ? (
+                        <span className={`rounded-lg border px-2.5 py-1 font-body text-[11px] font-medium ${COD_STYLES[o.codStatus]}`}>
+                          {o.codStatus}
+                        </span>
+                      ) : (
+                        <span className="font-body text-[11px] text-muted">—</span>
+                      )}
+                    </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       <a
                         href={`/track?id=${encodeURIComponent(o.trackingId)}`}
@@ -221,6 +387,14 @@ export default function MerchantDashboard() {
                       >
                         <MapPin className="h-3.5 w-3.5" strokeWidth={1.75} /> Live Status
                       </a>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <button
+                        onClick={() => handleSlip(o)}
+                        className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-body text-[11px] text-white transition-colors hover:border-white/30"
+                      >
+                        <Download className="h-3.5 w-3.5" strokeWidth={1.75} /> Slip
+                      </button>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">
                       {o.status === "Delivered" && (
@@ -234,6 +408,46 @@ export default function MerchantDashboard() {
                     </td>
                   </tr>
                 ))
+              ) : (
+                filteredOrders.map((o) => (
+                  <tr key={o.id} className="hover:bg-white/[0.02]">
+                    <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-accent">{o.trackingId}</td>
+                    <td className="px-4 py-3 font-body text-xs text-white">
+                      <div>{o.receiverName}</div>
+                      <div className="text-muted">{o.receiverPhone}</div>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <DeliveryTypeBadge isCod={o.isCod} />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-white">
+                      Rs {o.deliveryCharges.toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-white">
+                      {o.isCod ? `Rs ${o.parcelValue.toLocaleString()}` : "—"}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-accent">
+                      Rs {o.price.toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.status}</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {o.isCod ? (
+                        <span className={`rounded-lg border px-2.5 py-1 font-body text-[11px] font-medium ${COD_STYLES[o.codStatus]}`}>
+                          {o.codStatus}
+                        </span>
+                      ) : (
+                        <span className="font-body text-[11px] text-muted">Prepaid</span>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <button
+                        onClick={() => handleSlip(o)}
+                        className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-body text-[11px] text-white transition-colors hover:border-white/30"
+                      >
+                        <Download className="h-3.5 w-3.5" strokeWidth={1.75} /> Slip
+                      </button>
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -244,6 +458,51 @@ export default function MerchantDashboard() {
         <ReturnModal order={returnFor} onClose={() => setReturnFor(null)} onFiled={loadData} />
       )}
     </main>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 border-b-2 px-4 py-3 font-body text-sm font-medium transition-colors ${
+        active ? "border-accent text-accent" : "border-transparent text-muted hover:text-white"
+      }`}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+function SummaryCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border bg-white/[0.04] p-5">
+      <p className="font-body text-xs uppercase tracking-wider text-muted">{label}</p>
+      <p className="mt-1.5 font-display text-xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function DeliveryTypeBadge({ isCod }: { isCod: boolean }) {
+  return isCod ? (
+    <span className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 font-body text-[11px] font-medium text-amber-300">
+      COD
+    </span>
+  ) : (
+    <span className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 font-body text-[11px] font-medium text-sky-300">
+      Normal
+    </span>
   );
 }
 
