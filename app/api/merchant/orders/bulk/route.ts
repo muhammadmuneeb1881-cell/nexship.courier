@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { requireMerchant } from "../../../../../lib/auth";
 import {
   addOrder,
-  calculatePrice,
+  calculateOrderAmounts,
   createNotification,
   generateTrackingId,
   Order,
@@ -20,7 +20,16 @@ interface RawRow {
 
 type ValidatedOrder = Omit<
   Order,
-  "id" | "trackingId" | "createdAt" | "price" | "status" | "merchantId" | "codStatus" | "codCollectedAt" | "codRemittedAt"
+  | "id"
+  | "trackingId"
+  | "createdAt"
+  | "deliveryCharges"
+  | "price"
+  | "status"
+  | "merchantId"
+  | "codStatus"
+  | "codCollectedAt"
+  | "codRemittedAt"
 >;
 
 function validateRow(row: RawRow, rowNumber: number): { error: string } | { order: ValidatedOrder } {
@@ -59,6 +68,18 @@ function validateRow(row: RawRow, rowNumber: number): { error: string } | { orde
     return { error: `Row ${rowNumber}: invalid quantity` };
   }
 
+  // Optional columns — bulk sheets that don't include them default to a
+  // Normal/Prepaid booking (no cash collected from the receiver).
+  const isCodRaw = (row.isCod ?? row.codType ?? "").toString().trim().toLowerCase();
+  const isCod = ["cod", "true", "yes", "1"].includes(isCodRaw);
+  let parcelValue = 0;
+  if (isCod) {
+    parcelValue = Number(row.parcelValue ?? 0);
+    if (!Number.isFinite(parcelValue) || parcelValue < 0 || parcelValue > 10_000_000) {
+      return { error: `Row ${rowNumber}: invalid parcelValue for a COD booking` };
+    }
+  }
+
   return {
     order: {
       senderName: row.senderName.trim(),
@@ -72,6 +93,8 @@ function validateRow(row: RawRow, rowNumber: number): { error: string } | { orde
       packageType: row.packageType.trim(),
       weightKg: weight,
       quantity: qty,
+      isCod,
+      parcelValue,
     },
   };
 }
@@ -119,10 +142,12 @@ export async function POST(req: NextRequest) {
 
   const created: Order[] = [];
   for (const { order: partial } of validated) {
-    const price = await calculatePrice({
+    const { deliveryCharges, parcelValue, total: price } = await calculateOrderAmounts({
       weightKg: partial.weightKg,
       quantity: partial.quantity,
       packageType: partial.packageType,
+      isCod: partial.isCod,
+      parcelValue: partial.parcelValue,
     });
     const trackingId = await generateTrackingId();
     const order: Order = {
@@ -130,6 +155,8 @@ export async function POST(req: NextRequest) {
       id: randomUUID(),
       trackingId,
       createdAt: new Date().toISOString(),
+      deliveryCharges,
+      parcelValue,
       price,
       status: "Pending",
       merchantId: session.merchantId!,
