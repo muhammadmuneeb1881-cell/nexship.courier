@@ -21,7 +21,9 @@ import {
   KeyRound,
   Plus,
   X,
+  Download,
 } from "lucide-react";
+import { openSlip } from "../../lib/slip";
 
 interface Order {
   id: string;
@@ -38,12 +40,48 @@ interface Order {
   packageType: string;
   weightKg: number;
   quantity: number;
+  deliveryCharges: number;
+  parcelValue: number;
+  isCod: boolean;
   price: number;
   status: OrderStatus;
   merchantId: string | null;
   codStatus: CodStatus;
   codCollectedAt: string | null;
   codRemittedAt: string | null;
+}
+
+function handleSlip(o: Order) {
+  openSlip({
+    trackingId: o.trackingId,
+    createdAt: o.createdAt,
+    senderName: o.senderName,
+    senderPhone: o.senderPhone,
+    pickupAddress: o.pickupAddress,
+    receiverName: o.receiverName,
+    receiverPhone: o.receiverPhone,
+    deliveryCity: o.deliveryCity,
+    deliveryAddress: o.deliveryAddress,
+    packageType: o.packageType,
+    weightKg: o.weightKg,
+    quantity: o.quantity,
+    deliveryCharges: o.deliveryCharges,
+    parcelValue: o.parcelValue,
+    isCod: o.isCod,
+    price: o.price,
+  });
+}
+
+function DeliveryTypeBadge({ isCod }: { isCod: boolean }) {
+  return isCod ? (
+    <span className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 font-body text-[11px] font-medium text-amber-300">
+      COD
+    </span>
+  ) : (
+    <span className="rounded-lg border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 font-body text-[11px] font-medium text-sky-300">
+      Normal
+    </span>
+  );
 }
 
 type CodStatus = "Pending" | "Collected" | "Remitted";
@@ -214,7 +252,19 @@ export default function AdminDashboard() {
 
       if (merchantsRes.ok) setMerchants((await merchantsRes.json()).merchants || []);
       if (returnsRes.ok) setReturns((await returnsRes.json()).returns || []);
-      if (ticketsRes.ok) setTickets((await ticketsRes.json()).tickets || []);
+
+      if (ticketsRes.ok) {
+        setTickets((await ticketsRes.json()).tickets || []);
+      } else {
+        const body = await ticketsRes.json().catch(() => null);
+        console.error("[admin] failed to load support tickets:", ticketsRes.status, body?.error);
+        setError(
+          `Couldn't load support tickets (HTTP ${ticketsRes.status}). This usually means the ` +
+            `"support_tickets" table/migration is missing in the database, or the request timed ` +
+            `out — check the server logs for the real error.`
+        );
+      }
+
       if (auditRes.ok) setAuditLogs((await auditRes.json()).logs || []);
       if (notificationsRes.ok) setNotifications((await notificationsRes.json()).notifications || []);
     } catch {
@@ -568,8 +618,10 @@ function OrdersTab({
                 "Package",
                 "Weight",
                 "Qty",
+                "Type",
                 "Price",
                 "Status",
+                "Slip",
                 "",
               ].map((h) => (
                 <th key={h} className="whitespace-nowrap px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wider text-muted">
@@ -581,7 +633,7 @@ function OrdersTab({
           <tbody className="divide-y divide-border">
             {orders.length === 0 ? (
               <tr>
-                <td colSpan={13} className="px-4 py-10 text-center font-body text-sm text-muted">
+                <td colSpan={15} className="px-4 py-10 text-center font-body text-sm text-muted">
                   <Package className="mx-auto mb-2 h-6 w-6 text-muted" strokeWidth={1.5} />
                   No orders found.
                 </td>
@@ -610,6 +662,9 @@ function OrdersTab({
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.packageType}</td>
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.weightKg} kg</td>
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.quantity}</td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <DeliveryTypeBadge isCod={o.isCod} />
+                  </td>
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-accent">
                     Rs {o.price.toLocaleString()}
                   </td>
@@ -625,6 +680,14 @@ function OrdersTab({
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <button
+                      onClick={() => handleSlip(o)}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-body text-[11px] text-white transition-colors hover:border-white/30"
+                    >
+                      <Download className="h-3.5 w-3.5" strokeWidth={1.75} /> Slip
+                    </button>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
                     <button
@@ -1222,9 +1285,10 @@ function CodTab({
   orders: Order[];
   onCodChange: (id: string, status: CodStatus) => void;
 }) {
-  const totalPending = orders.filter((o) => o.codStatus === "Pending").reduce((sum, o) => sum + o.price, 0);
-  const totalCollected = orders.filter((o) => o.codStatus === "Collected").reduce((sum, o) => sum + o.price, 0);
-  const totalRemitted = orders.filter((o) => o.codStatus === "Remitted").reduce((sum, o) => sum + o.price, 0);
+  const codOrders = orders.filter((o) => o.isCod);
+  const totalPending = codOrders.filter((o) => o.codStatus === "Pending").reduce((sum, o) => sum + o.price, 0);
+  const totalCollected = codOrders.filter((o) => o.codStatus === "Collected").reduce((sum, o) => sum + o.price, 0);
+  const totalRemitted = codOrders.filter((o) => o.codStatus === "Remitted").reduce((sum, o) => sum + o.price, 0);
 
   return (
     <div className="mt-6">
@@ -1237,7 +1301,7 @@ function CodTab({
         <table className="min-w-full divide-y divide-border">
           <thead>
             <tr className="bg-white/[0.03]">
-              {["Tracking ID", "Sender", "Amount", "Order Status", "COD Status"].map((h) => (
+              {["Tracking ID", "Sender", "Delivery Charges", "COD Amount", "Total", "Order Status", "COD Status", "Slip"].map((h) => (
                 <th key={h} className="whitespace-nowrap px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wider text-muted">
                   {h}
                 </th>
@@ -1245,19 +1309,25 @@ function CodTab({
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {orders.length === 0 ? (
+            {codOrders.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center font-body text-sm text-muted">
+                <td colSpan={8} className="px-4 py-10 text-center font-body text-sm text-muted">
                   <Wallet className="mx-auto mb-2 h-6 w-6 text-muted" strokeWidth={1.5} />
-                  No orders yet.
+                  No COD orders yet.
                 </td>
               </tr>
             ) : (
-              orders.map((o) => (
+              codOrders.map((o) => (
                 <tr key={o.id} className="hover:bg-white/[0.02]">
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-accent">{o.trackingId}</td>
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-white">{o.senderName}</td>
-                  <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-white">
+                  <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-white">
+                    Rs {o.deliveryCharges.toLocaleString()}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-white">
+                    Rs {o.parcelValue.toLocaleString()}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 font-body text-xs font-semibold text-accent">
                     Rs {o.price.toLocaleString()}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 font-body text-xs text-muted">{o.status}</td>
@@ -1273,6 +1343,14 @@ function CodTab({
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <button
+                      onClick={() => handleSlip(o)}
+                      className="flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 font-body text-[11px] text-white transition-colors hover:border-white/30"
+                    >
+                      <Download className="h-3.5 w-3.5" strokeWidth={1.75} /> Slip
+                    </button>
                   </td>
                 </tr>
               ))
