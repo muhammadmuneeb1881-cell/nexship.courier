@@ -2,7 +2,6 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Space_Grotesk, Inter } from "next/font/google";
 import WhatsAppButton from "../components/WhatsAppButton";
-import SupportPanel from "../components/SupportPanel";
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
@@ -63,7 +62,6 @@ export default function RootLayout({
       <body>
         {children}
         <WhatsAppButton />
-        <SupportPanel />
       </body>
     </html>
   );
