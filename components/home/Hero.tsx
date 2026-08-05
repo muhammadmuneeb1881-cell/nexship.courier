@@ -104,7 +104,7 @@ export default function Hero() {
             </div>
 
             <div className="mt-8 flex flex-wrap gap-4">
-              <Button>Get Quote</Button>
+              <Button href="/booking">Get Quote</Button>
               <a
                 href="/track"
                 className="rounded-full border border-border bg-white/[0.03] px-7 py-3.5 font-display text-sm font-semibold text-white backdrop-blur-md transition-all duration-300 hover:scale-[1.03] hover:border-white/20 hover:bg-white/[0.06] active:scale-[0.98]"
