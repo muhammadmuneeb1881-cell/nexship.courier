@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { requireAdmin, requireMerchant } from "../../../lib/auth";
 import {
   addOrder,
-  calculatePrice,
+  calculateOrderAmounts,
   createNotification,
   generateTrackingId,
   getOrders,
@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
     packageType,
     weightKg,
     quantity,
+    isCod,
+    parcelValue,
   } = body;
 
   const requiredStrings = {
@@ -85,20 +87,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
   }
 
-  const price = await calculatePrice({ weightKg: weight, quantity: qty, packageType });
+  // COD (Cash on Delivery) vs Normal (Prepaid) booking. Defaults to COD to
+  // stay backwards-compatible with any older client that doesn't send it.
+  const codBooking = isCod === undefined ? true : Boolean(isCod);
+  const rawParcelValue = codBooking ? Number(parcelValue) : 0;
+  if (codBooking && (!Number.isFinite(rawParcelValue) || rawParcelValue < 0 || rawParcelValue > 10_000_000)) {
+    return NextResponse.json({ error: "Invalid parcel value" }, { status: 400 });
+  }
+
+  const { deliveryCharges, parcelValue: codAmount, total: price } = await calculateOrderAmounts({
+    weightKg: weight,
+    quantity: qty,
+    packageType,
+    isCod: codBooking,
+    parcelValue: rawParcelValue,
+  });
   const trackingId = await generateTrackingId();
 
   // A merchant session (from /merchant login) automatically attaches the
   // order to that merchant's account — the public booking form itself
   // stays unchanged for walk-in / non-merchant customers.
-  const rawCookieHeader = req.headers.get("cookie") || "";
   const merchantSession = await requireMerchant(req);
-
-  // ---- TEMPORARY DEBUG LOGGING (remove after diagnosing) ----
-  console.log("[ORDER DEBUG] has cookie header:", rawCookieHeader.length > 0);
-  console.log("[ORDER DEBUG] cookie names present:", rawCookieHeader.split(";").map((c) => c.trim().split("=")[0]));
-  console.log("[ORDER DEBUG] merchantSession resolved:", merchantSession);
-  // -------------------------------------------------------------
 
   const order: Order = {
     id: randomUUID(),
@@ -115,6 +124,9 @@ export async function POST(req: NextRequest) {
     packageType,
     weightKg: weight,
     quantity: qty,
+    deliveryCharges,
+    parcelValue: codAmount,
+    isCod: codBooking,
     price,
     status: "Pending",
     merchantId: merchantSession?.merchantId || null,
@@ -125,26 +137,34 @@ export async function POST(req: NextRequest) {
 
   await addOrder(order);
 
-  // Notify the admin. Both helpers catch their own errors and resolve to
-  // false rather than throwing, so a failed email/WhatsApp send never
-  // blocks the order response. They're awaited (not fire-and-forget)
-  // because serverless functions can be frozen/terminated right after the
-  // response is returned, which would silently drop un-awaited work.
-  await Promise.all([
-    sendOrderNotificationEmail(order),
-    sendOrderConfirmationEmail(order),
-    sendOrderWhatsAppNotification(order),
-  ]);
+  // IMPORTANT: the order is already saved above, so it is immediately
+  // visible in the merchant/admin dashboards as soon as this request
+  // returns — we must NOT make the merchant wait for email/WhatsApp calls.
+  // Those can be slow (SMTP/WhatsApp Cloud API round-trips) or even hang,
+  // and awaiting them here was exactly what made bookings — and therefore
+  // "when does the order show up in my account" — feel very slow/late.
+  //
+  // We intentionally do NOT await this: it runs in the background while
+  // the response below is already on its way to the browser. Every call
+  // inside already catches its own errors, so a failed
+  // email/WhatsApp/notification send can never throw or crash the server.
+  void (async () => {
+    await Promise.all([
+      sendOrderNotificationEmail(order),
+      sendOrderConfirmationEmail(order),
+      sendOrderWhatsAppNotification(order),
+    ]).catch((err) => console.error("[orders] background notification failed:", err));
 
-  if (order.merchantId) {
-    await createNotification({
-      recipientType: "merchant",
-      merchantId: order.merchantId,
-      category: "order",
-      title: `Order booked — ${order.trackingId}`,
-      message: `Your shipment to ${order.receiverName} (${order.deliveryCity}) has been booked.`,
-    }).catch(() => null);
-  }
+    if (order.merchantId) {
+      await createNotification({
+        recipientType: "merchant",
+        merchantId: order.merchantId,
+        category: "order",
+        title: `Order booked — ${order.trackingId}`,
+        message: `Your shipment to ${order.receiverName} (${order.deliveryCity}) has been booked.`,
+      }).catch(() => null);
+    }
+  })();
 
   return NextResponse.json({ order }, { status: 201 });
 }
