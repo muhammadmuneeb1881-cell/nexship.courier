@@ -11,6 +11,20 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// IMPORTANT: On Vercel (App Router / Fluid compute), the platform's Data
+// Cache can transparently cache the *internal* fetch() calls that
+// supabase-js makes to the Supabase REST API — even inside route handlers
+// marked `export const dynamic = "force-dynamic"`. That flag only stops the
+// route itself from being statically cached; it does NOT automatically mark
+// every fetch a library makes underneath as uncacheable. Vercel logs showed
+// this literally: "Using cache ...supabase.co/rest/v1/orders", which is why
+// the merchant dashboard kept seeing an old order status after admin
+// updates. Passing a custom `fetch` here that forces `cache: "no-store"` on
+// every request the client makes fixes it at the source, for both clients.
+function noStoreFetch(input: RequestInfo | URL, init?: RequestInit) {
+  return fetch(input, { ...init, cache: "no-store" });
+}
+
 /** Browser/client-safe Supabase client — uses the public anon key. */
 export function getSupabaseClient(): SupabaseClient {
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -18,7 +32,9 @@ export function getSupabaseClient(): SupabaseClient {
       "Supabase is not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local."
     );
   }
-  return createClient(supabaseUrl, supabaseAnonKey);
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { fetch: noStoreFetch },
+  });
 }
 
 /**
@@ -34,5 +50,6 @@ export function getSupabaseAdminClient(): SupabaseClient {
   }
   return createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: { persistSession: false },
+    global: { fetch: noStoreFetch },
   });
 }
