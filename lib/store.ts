@@ -17,6 +17,13 @@ export interface Order {
   packageType: string;
   weightKg: number;
   quantity: number;
+  /** Delivery service fee only (weight/quantity/package-type based). */
+  deliveryCharges: number;
+  /** Value of the parcel to collect from the receiver. 0 when isCod is false. */
+  parcelValue: number;
+  /** true = Cash on Delivery (amount collected from receiver on delivery). false = Normal/Prepaid. */
+  isCod: boolean;
+  /** Total amount = deliveryCharges + parcelValue. Kept for backwards compatibility. */
   price: number;
   status: OrderStatus;
   merchantId: string | null;
@@ -82,6 +89,9 @@ function rowToOrder(row: any): Order {
     packageType: row.package_type,
     weightKg: Number(row.weight_kg),
     quantity: Number(row.quantity),
+    deliveryCharges: row.delivery_charges != null ? Number(row.delivery_charges) : Number(row.price),
+    parcelValue: row.parcel_value != null ? Number(row.parcel_value) : 0,
+    isCod: row.is_cod != null ? Boolean(row.is_cod) : true,
     price: Number(row.price),
     status: row.status,
     merchantId: row.merchant_id ?? null,
@@ -107,6 +117,9 @@ function orderToRow(order: Order) {
     package_type: order.packageType,
     weight_kg: order.weightKg,
     quantity: order.quantity,
+    delivery_charges: order.deliveryCharges,
+    parcel_value: order.parcelValue,
+    is_cod: order.isCod,
     price: order.price,
     status: order.status,
     merchant_id: order.merchantId,
@@ -265,6 +278,9 @@ export async function setPricing(config: PricingConfig): Promise<PricingConfig> 
   return rowToPricing(data);
 }
 
+// Computes the delivery service fee only (based on weight/quantity/package
+// type). This is the same calculation used before COD support was added —
+// kept under its original name so existing callers keep working.
 export async function calculatePrice(params: {
   weightKg: number;
   quantity: number;
@@ -275,6 +291,23 @@ export async function calculatePrice(params: {
   const total =
     pricing.baseFee + pricing.perKgRate * params.weightKg * params.quantity + extra * params.quantity;
   return Math.round(total);
+}
+
+/**
+ * Full price breakdown for a booking: delivery charges (service fee),
+ * parcel value (COD collection amount, 0 for Normal/Prepaid bookings) and
+ * the total amount to be received from the customer.
+ */
+export async function calculateOrderAmounts(params: {
+  weightKg: number;
+  quantity: number;
+  packageType: string;
+  isCod: boolean;
+  parcelValue: number;
+}): Promise<{ deliveryCharges: number; parcelValue: number; total: number }> {
+  const deliveryCharges = await calculatePrice(params);
+  const parcelValue = params.isCod ? Math.round(params.parcelValue) : 0;
+  return { deliveryCharges, parcelValue, total: deliveryCharges + parcelValue };
 }
 
 // ---- INQUIRIES ----
