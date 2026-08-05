@@ -90,7 +90,7 @@ export default function Navbar() {
             </nav>
 
             <div className="flex items-center gap-3">
-              <Button className="hidden sm:inline-flex">Get Quote</Button>
+              <Button href="/booking" className="hidden sm:inline-flex">Get Quote</Button>
               <button
                 type="button"
                 aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -121,7 +121,7 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="mt-2 px-1">
-                <Button className="w-full sm:hidden">Get Quote</Button>
+                <Button href="/booking" className="w-full sm:hidden" onClick={() => setMenuOpen(false)}>Get Quote</Button>
               </div>
             </nav>
           </div>
