@@ -145,8 +145,14 @@ export default function MerchantDashboard() {
     });
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  // `silent` = background refresh (auto-poll / tab focus): keeps whatever is
+  // currently on screen and swaps the data in once the new copy arrives, so
+  // admin-side changes (status, COD updates, new notifications, etc.) show
+  // up on their own without the merchant having to click anything.
+  // A normal (non-silent) call is only used for the very first load and the
+  // manual "Refresh" button, where showing the loading state is expected.
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [meRes, ordersRes, notifRes] = await Promise.all([
         fetch("/api/merchant/me", { cache: "no-store" }),
@@ -161,12 +167,33 @@ export default function MerchantDashboard() {
       setOrders((await ordersRes.json()).orders || []);
       setNotifications((await notifRes.json()).notifications || []);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
+
+    // Auto-refresh every 15s so admin-side changes (order status, COD
+    // updates, new merchant notifications) appear here without the
+    // merchant needing to manually hit Refresh or reload the page.
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadData(true);
+      }
+    }, 15000);
+
+    // Also refresh instantly the moment the merchant switches back to this
+    // tab (e.g. was on WhatsApp/another tab while admin updated an order).
+    const handleFocus = () => loadData(true);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -248,7 +275,7 @@ export default function MerchantDashboard() {
               )}
             </div>
             <button
-              onClick={loadData}
+              onClick={() => loadData()}
               className="flex items-center gap-2 rounded-xl border border-border bg-white/[0.04] px-4 py-2.5 font-body text-sm text-white transition-colors hover:border-white/20"
             >
               <RefreshCw className="h-4 w-4" strokeWidth={1.75} /> Refresh
