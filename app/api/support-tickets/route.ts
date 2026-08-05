@@ -27,24 +27,43 @@ export async function POST(req: NextRequest) {
 
   const session = await requireMerchant(req);
 
-  const ticket = await createSupportTicket({
-    merchantId: session?.merchantId || null,
-    name,
-    email,
-    phone,
-    subject,
-    message,
-  });
+  let ticket;
+  try {
+    ticket = await createSupportTicket({
+      merchantId: session?.merchantId || null,
+      name,
+      email,
+      phone,
+      subject,
+      message,
+    });
+  } catch (err) {
+    // Log the real DB error (e.g. missing "support_tickets" table/migration)
+    // instead of letting it bubble into a generic 500 HTML page — this is
+    // the #1 reason tickets can silently fail to appear in the admin panel.
+    console.error("[support-tickets] failed to save ticket:", err);
+    return NextResponse.json(
+      { error: "Could not save your ticket right now. Please try again in a moment." },
+      { status: 500 }
+    );
+  }
 
-  await createNotification({
-    recipientType: "admin",
-    category: "system",
-    title: `New support ticket — ${subject}`,
-    message: `From ${name} (${email})`,
-  }).catch(() => null);
+  // Notification + email are best-effort side effects — fired in the
+  // background so the ticket form doesn't sit waiting on SMTP. The ticket
+  // itself is already saved above, so the admin panel's next fetch of
+  // /api/admin/support-tickets will show it right away regardless.
+  void (async () => {
+    await createNotification({
+      recipientType: "admin",
+      category: "system",
+      title: `New support ticket — ${subject}`,
+      message: `From ${name} (${email})`,
+    }).catch((err) => console.error("[support-tickets] admin notification failed:", err));
 
-  // Best-effort email alert to the support inbox; never blocks the response.
-  await sendSupportTicketEmail(ticket).catch(() => null);
+    await sendSupportTicketEmail(ticket).catch((err) =>
+      console.error("[support-tickets] email alert failed:", err)
+    );
+  })();
 
   return NextResponse.json({ ticket }, { status: 201 });
 }
