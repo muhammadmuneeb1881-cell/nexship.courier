@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, CheckCircle2, PackageCheck, Copy, Check } from "lucide-react";
+import { AlertCircle, CheckCircle2, PackageCheck, Copy, Check, Banknote, Truck, Download } from "lucide-react";
 import Navbar from "../layout/Navbar";
 import Footer from "../layout/Footer";
 import Container from "../ui/Container";
@@ -11,6 +11,7 @@ import Button from "../ui/Button";
 import CitySelect from "../shared/CitySelect";
 import CityBadge from "../shared/CityBadge";
 import { CITIES, LIVE_CITY } from "../../lib/cities";
+import { openSlip } from "../../lib/slip";
 
 interface FormState {
   senderName: string;
@@ -24,6 +25,7 @@ interface FormState {
   packageType: string;
   weightKg: string;
   quantity: string;
+  parcelValue: string;
 }
 
 interface PricingConfig {
@@ -44,20 +46,29 @@ const INITIAL: FormState = {
   packageType: "Documents",
   weightKg: "1",
   quantity: "1",
+  parcelValue: "",
 };
 
 export default function BookingForm() {
+  const [orderType, setOrderType] = useState<"cod" | "normal">("cod");
   const [values, setValues] = useState<FormState>(INITIAL);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [orderPrice, setOrderPrice] = useState<number | null>(null);
-  const [trackingId, setTrackingId] = useState<string | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<{
+    trackingId: string;
+    createdAt: string;
+    deliveryCharges: number;
+    parcelValue: number;
+    isCod: boolean;
+    price: number;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [pricing, setPricing] = useState<PricingConfig | null>(null);
 
   const selectedCity = CITIES.find((c) => c.slug === values.deliveryCity);
   const isBookable = selectedCity?.status === "live";
+  const isCod = orderType === "cod";
 
   useEffect(() => {
     fetch("/api/pricing")
@@ -68,13 +79,16 @@ export default function BookingForm() {
 
   const weightNum = parseFloat(values.weightKg) || 0;
   const qtyNum = parseInt(values.quantity, 10) || 0;
-  const estimatedPrice = pricing
+  const parcelValueNum = parseFloat(values.parcelValue) || 0;
+  const deliveryCharges = pricing
     ? Math.round(
         pricing.baseFee +
           pricing.perKgRate * weightNum * qtyNum +
           (pricing.packageTypeExtra[values.packageType] || 0) * qtyNum
       )
     : null;
+  const codAmount = isCod ? parcelValueNum : 0;
+  const totalAmount = deliveryCharges !== null ? deliveryCharges + codAmount : null;
 
   const update = (field: keyof FormState, value: string) =>
     setValues((s) => ({ ...s, [field]: value }));
@@ -85,13 +99,17 @@ export default function BookingForm() {
 
     if (submitted) {
       setValues(INITIAL);
+      setOrderType("cod");
       setSubmitted(false);
-      setOrderPrice(null);
-      setTrackingId(null);
+      setConfirmedOrder(null);
       return;
     }
 
     if (!isBookable) return;
+    if (isCod && (!values.parcelValue || parcelValueNum <= 0)) {
+      setErrorMsg("Please enter the parcel price to collect from the receiver.");
+      return;
+    }
 
     setErrorMsg(null);
     setSubmitting(true);
@@ -103,6 +121,8 @@ export default function BookingForm() {
           ...values,
           weightKg: weightNum,
           quantity: qtyNum,
+          isCod,
+          parcelValue: isCod ? parcelValueNum : 0,
         }),
       });
       const data = await res.json();
@@ -111,14 +131,42 @@ export default function BookingForm() {
         setSubmitting(false);
         return;
       }
-      setOrderPrice(data.order.price);
-      setTrackingId(data.order.trackingId);
+      setConfirmedOrder({
+        trackingId: data.order.trackingId,
+        createdAt: data.order.createdAt,
+        deliveryCharges: data.order.deliveryCharges,
+        parcelValue: data.order.parcelValue,
+        isCod: data.order.isCod,
+        price: data.order.price,
+      });
       setSubmitted(true);
     } catch {
       setErrorMsg("Could not reach the server. Please try again.");
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleDownloadSlip = () => {
+    if (!confirmedOrder) return;
+    openSlip({
+      trackingId: confirmedOrder.trackingId,
+      createdAt: confirmedOrder.createdAt,
+      senderName: values.senderName,
+      senderPhone: values.senderPhone,
+      pickupAddress: values.pickupAddress,
+      receiverName: values.receiverName,
+      receiverPhone: values.receiverPhone,
+      deliveryCity: selectedCity?.name || values.deliveryCity,
+      deliveryAddress: values.deliveryAddress,
+      packageType: values.packageType,
+      weightKg: weightNum,
+      quantity: qtyNum,
+      deliveryCharges: confirmedOrder.deliveryCharges,
+      parcelValue: confirmedOrder.parcelValue,
+      isCod: confirmedOrder.isCod,
+      price: confirmedOrder.price,
+    });
   };
 
   return (
@@ -151,6 +199,46 @@ export default function BookingForm() {
                 Pickup city: <span className="font-semibold text-accent">Karachi</span>
               </p>
               <CityBadge status="live" />
+            </div>
+
+            <h3 className="mt-8 font-display text-sm font-semibold uppercase tracking-wider text-muted">
+              Booking Type
+            </h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setOrderType("cod")}
+                className={`flex items-start gap-3 rounded-2xl border px-5 py-4 text-left transition-colors ${
+                  isCod
+                    ? "border-accent/50 bg-accent/[0.08]"
+                    : "border-border bg-white/[0.03] hover:border-white/20"
+                }`}
+              >
+                <Banknote className={`mt-0.5 h-5 w-5 shrink-0 ${isCod ? "text-accent" : "text-muted"}`} strokeWidth={1.75} />
+                <span>
+                  <span className="block font-display text-sm font-semibold text-white">Cash on Delivery (COD)</span>
+                  <span className="mt-0.5 block font-body text-xs leading-5 text-muted">
+                    We collect the parcel price + delivery charges from the receiver on your behalf.
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderType("normal")}
+                className={`flex items-start gap-3 rounded-2xl border px-5 py-4 text-left transition-colors ${
+                  !isCod
+                    ? "border-sky-400/50 bg-sky-400/[0.08]"
+                    : "border-border bg-white/[0.03] hover:border-white/20"
+                }`}
+              >
+                <Truck className={`mt-0.5 h-5 w-5 shrink-0 ${!isCod ? "text-sky-300" : "text-muted"}`} strokeWidth={1.75} />
+                <span>
+                  <span className="block font-display text-sm font-semibold text-white">Normal Delivery (Prepaid)</span>
+                  <span className="mt-0.5 block font-body text-xs leading-5 text-muted">
+                    You&apos;ve already been paid — nothing is collected from the receiver.
+                  </span>
+                </span>
+              </button>
             </div>
 
             <h3 className="mt-8 font-display text-sm font-semibold uppercase tracking-wider text-muted">
@@ -267,14 +355,40 @@ export default function BookingForm() {
                 value={values.quantity}
                 onChange={(v) => update("quantity", v)}
               />
+
+              {isCod && (
+                <div className="sm:col-span-3">
+                  <FloatingField
+                    id="parcelValue"
+                    label="Parcel Price (Rs) — amount to collect from receiver"
+                    type="number"
+                    value={values.parcelValue}
+                    onChange={(v) => update("parcelValue", v)}
+                  />
+                </div>
+              )}
             </div>
 
-            {estimatedPrice !== null && (
-              <div className="mt-5 flex items-center justify-between rounded-2xl border border-accent/25 bg-accent/[0.06] px-5 py-3.5">
-                <p className="font-body text-xs text-white/90 sm:text-sm">Estimated Price</p>
-                <p className="font-display text-lg font-semibold text-accent">
-                  Rs {estimatedPrice.toLocaleString()}
-                </p>
+            {deliveryCharges !== null && (
+              <div className="mt-5 space-y-2 rounded-2xl border border-accent/25 bg-accent/[0.06] px-5 py-4">
+                {isCod && (
+                  <div className="flex items-center justify-between">
+                    <p className="font-body text-xs text-white/70 sm:text-sm">COD Amount (Parcel Price)</p>
+                    <p className="font-body text-sm font-medium text-white">Rs {codAmount.toLocaleString()}</p>
+                  </div>
+                )}
+                <div className="flex items-center justify-between">
+                  <p className="font-body text-xs text-white/70 sm:text-sm">Delivery Charges</p>
+                  <p className="font-body text-sm font-medium text-white">Rs {deliveryCharges.toLocaleString()}</p>
+                </div>
+                <div className="flex items-center justify-between border-t border-accent/15 pt-2">
+                  <p className="font-body text-xs text-white/90 sm:text-sm">
+                    {isCod ? "Total to Collect from Receiver" : "Total (Prepaid)"}
+                  </p>
+                  <p className="font-display text-lg font-semibold text-accent">
+                    Rs {(totalAmount ?? 0).toLocaleString()}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -310,7 +424,7 @@ export default function BookingForm() {
               )}
             </div>
 
-            {submitted && orderPrice !== null && trackingId && (
+            {submitted && confirmedOrder && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -319,9 +433,9 @@ export default function BookingForm() {
                 <div className="flex items-center gap-3 border-b border-accent/15 px-5 py-4">
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-accent" strokeWidth={1.75} />
                   <p className="font-body text-xs leading-5 text-white/90 sm:text-sm">
-                    Booking confirmed! Total price:{" "}
+                    Booking confirmed! {confirmedOrder.isCod ? "Total to collect" : "Total (prepaid)"}:{" "}
                     <span className="font-semibold text-accent">
-                      Rs {orderPrice.toLocaleString()}
+                      Rs {confirmedOrder.price.toLocaleString()}
                     </span>
                   </p>
                 </div>
@@ -332,12 +446,12 @@ export default function BookingForm() {
                     </p>
                     <div className="mt-1 flex items-center gap-2">
                       <p className="font-display text-xl font-bold tracking-tight text-accent">
-                        {trackingId}
+                        {confirmedOrder.trackingId}
                       </p>
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(trackingId);
+                          navigator.clipboard.writeText(confirmedOrder.trackingId);
                           setCopied(true);
                           setTimeout(() => setCopied(false), 1800);
                         }}
@@ -355,12 +469,22 @@ export default function BookingForm() {
                       Save this ID to track your order anytime.
                     </p>
                   </div>
-                  <a
-                    href={`/track?id=${encodeURIComponent(trackingId)}`}
-                    className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-body text-xs font-semibold text-accent transition-colors hover:bg-accent/20"
-                  >
-                    Track this order →
-                  </a>
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={handleDownloadSlip}
+                      className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/20 bg-white/[0.06] px-4 py-2 font-body text-xs font-semibold text-white transition-colors hover:bg-white/[0.1]"
+                    >
+                      <Download className="h-3.5 w-3.5" strokeWidth={2} />
+                      {confirmedOrder.isCod ? "Download COD Slip" : "Download Slip"}
+                    </button>
+                    <a
+                      href={`/track?id=${encodeURIComponent(confirmedOrder.trackingId)}`}
+                      className="shrink-0 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 font-body text-xs font-semibold text-accent transition-colors hover:bg-accent/20"
+                    >
+                      Track this order →
+                    </a>
+                  </div>
                 </div>
               </motion.div>
             )}
