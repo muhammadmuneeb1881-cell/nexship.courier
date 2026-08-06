@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MapPin, X, Menu } from "lucide-react";
+import { MapPin, X, Menu, Mail, MessageCircle } from "lucide-react";
 import Button from "../ui/Button";
 import Container from "../ui/Container";
 import { KARACHI_NOTICE } from "../../lib/cities";
+
+const SALES_EMAIL = process.env.NEXT_PUBLIC_SALES_EMAIL || process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "nexship.courier@gmail.com";
+const SALES_WHATSAPP = process.env.NEXT_PUBLIC_SALES_WHATSAPP || process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "";
 
 const LINKS = [
   { label: "Home", href: "/" },
@@ -22,7 +25,9 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [bannerOpen, setBannerOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [merchantOpen, setMerchantOpen] = useState(false);
   const lastY = useRef(0);
+  const merchantRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
@@ -38,6 +43,18 @@ export default function Navbar() {
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Close the "Talk to Sales" dropdown when clicking outside it
+  useEffect(() => {
+    if (!merchantOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (merchantRef.current && !merchantRef.current.contains(e.target as Node)) {
+        setMerchantOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [merchantOpen]);
 
   return (
     <header
@@ -87,6 +104,58 @@ export default function Navbar() {
                   <span className="absolute left-0 -bottom-0.5 h-px w-0 bg-accent transition-all duration-300 ease-out group-hover:w-full" />
                 </a>
               ))}
+
+              {/* Merchant Account — opens a "Talk to Sales" dropdown instead of a page */}
+              <div className="relative" ref={merchantRef}>
+                <button
+                  type="button"
+                  onClick={() => setMerchantOpen((v) => !v)}
+                  aria-expanded={merchantOpen}
+                  className="group relative py-1 font-body text-sm text-muted transition-colors duration-300 hover:text-white"
+                >
+                  Merchant Account
+                  <span className="absolute left-0 -bottom-0.5 h-px w-0 bg-accent transition-all duration-300 ease-out group-hover:w-full" />
+                </button>
+
+                <div
+                  className={`absolute right-0 top-full mt-3 w-72 origin-top-right rounded-2xl border border-border bg-surface shadow-2xl transition-all duration-200 ${
+                    merchantOpen ? "pointer-events-auto scale-100 opacity-100" : "pointer-events-none scale-95 opacity-0"
+                  }`}
+                >
+                  <div className="border-b border-border px-4 py-3">
+                    <p className="font-display text-sm font-semibold text-white">Talk to Sales</p>
+                    <p className="mt-0.5 font-body text-xs text-muted">
+                      Want a merchant account? Reach out and our team will set you up.
+                    </p>
+                  </div>
+                  <div className="space-y-1 p-2">
+                    <a
+                      href={`mailto:${SALES_EMAIL}?subject=${encodeURIComponent("Merchant Account Inquiry")}`}
+                      onClick={() => setMerchantOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm text-white transition-colors hover:bg-white/[0.06]"
+                    >
+                      <Mail className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
+                      <span className="flex flex-col">
+                        Email us
+                        <span className="font-body text-[11px] text-muted">{SALES_EMAIL}</span>
+                      </span>
+                    </a>
+                    <a
+                      href={`https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent("Hi, I'd like to open a merchant account with NexShip.")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setMerchantOpen(false)}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm text-white transition-colors hover:bg-white/[0.06]"
+                    >
+                      <MessageCircle className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
+                      <span className="flex flex-col">
+                        WhatsApp us
+                        {SALES_WHATSAPP && <span className="font-body text-[11px] text-muted">+{SALES_WHATSAPP}</span>}
+                      </span>
+                    </a>
+                  </div>
+                </div>
+              </div>
             </nav>
 
             <div className="flex items-center gap-3">
@@ -120,6 +189,33 @@ export default function Navbar() {
                   {label}
                 </a>
               ))}
+
+              {/* Merchant Account — mobile: same "Talk to Sales" options, shown inline */}
+              <div className="mt-1 rounded-xl border border-border/60 bg-white/[0.02] px-4 py-3">
+                <p className="font-body text-sm text-white">Merchant Account</p>
+                <p className="mt-0.5 font-body text-xs text-muted">Talk to Sales to get set up</p>
+                <div className="mt-2 flex flex-col gap-1">
+                  <a
+                    href={`mailto:${SALES_EMAIL}?subject=${encodeURIComponent("Merchant Account Inquiry")}`}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 font-body text-xs text-white transition-colors hover:bg-white/[0.06]"
+                  >
+                    <Mail className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.75} />
+                    {SALES_EMAIL}
+                  </a>
+                  <a
+                    href={`https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent("Hi, I'd like to open a merchant account with NexShip.")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 font-body text-xs text-white transition-colors hover:bg-white/[0.06]"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.75} />
+                    {SALES_WHATSAPP ? `+${SALES_WHATSAPP}` : "WhatsApp us"}
+                  </a>
+                </div>
+              </div>
+
               <div className="mt-2 px-1">
                 <Button href="/booking" className="w-full sm:hidden" onClick={() => setMenuOpen(false)}>Get Quote</Button>
               </div>
