@@ -48,22 +48,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Notification + email are best-effort side effects — fired in the
-  // background so the ticket form doesn't sit waiting on SMTP. The ticket
-  // itself is already saved above, so the admin panel's next fetch of
-  // /api/admin/support-tickets will show it right away regardless.
-  void (async () => {
-    await createNotification({
-      recipientType: "admin",
-      category: "system",
-      title: `New support ticket — ${subject}`,
-      message: `From ${name} (${email})`,
-    }).catch((err) => console.error("[support-tickets] admin notification failed:", err));
+  // NOTE: these used to be fired in the background (unawaited) so the
+  // response wouldn't wait on SMTP. Under Vercel's Fluid compute, the
+  // function is frozen right after the response is sent, so that
+  // background work often never got the chance to finish — this was why
+  // ticket emails weren't arriving even though the code "looked" correct.
+  // We now await them before responding (~1s extra, but the email is
+  // actually guaranteed to be attempted). Errors are still swallowed so a
+  // failed email/notification never breaks ticket submission for the user.
+  await createNotification({
+    recipientType: "admin",
+    category: "system",
+    title: `New support ticket — ${subject}`,
+    message: `From ${name} (${email})`,
+  }).catch((err) => console.error("[support-tickets] admin notification failed:", err));
 
-    await sendSupportTicketEmail(ticket).catch((err) =>
-      console.error("[support-tickets] email alert failed:", err)
-    );
-  })();
+  await sendSupportTicketEmail(ticket).catch((err) =>
+    console.error("[support-tickets] email alert failed:", err)
+  );
 
   return NextResponse.json({ ticket }, { status: 201 });
 }
