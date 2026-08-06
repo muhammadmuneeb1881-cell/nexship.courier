@@ -147,34 +147,30 @@ export async function POST(req: NextRequest) {
 
     await addOrder(order);
 
-    // IMPORTANT: the order is already saved above, so it is immediately
-    // visible in the merchant/admin dashboards as soon as this request
-    // returns — we must NOT make the merchant wait for email/WhatsApp calls.
-    // Those can be slow (SMTP/WhatsApp Cloud API round-trips) or even hang,
-    // and awaiting them here was exactly what made bookings — and therefore
-    // "when does the order show up in my account" — feel very slow/late.
-    //
-    // We intentionally do NOT await this: it runs in the background while
-    // the response below is already on its way to the browser. Every call
-    // inside already catches its own errors, so a failed
-    // email/WhatsApp/notification send can never throw or crash the server.
-    void (async () => {
-      await Promise.all([
-        sendOrderNotificationEmail(order),
-        sendOrderConfirmationEmail(order),
-        sendOrderWhatsAppNotification(order),
-      ]).catch((err) => console.error("[orders] background notification failed:", err));
+    // NOTE: these used to be fired in the background (unawaited) so the
+    // booking form wouldn't wait on SMTP/WhatsApp. Under Vercel's Fluid
+    // compute, the function is frozen right after the response is sent, so
+    // that background work often never finished — this is why the admin
+    // notification email worked sometimes but the customer confirmation
+    // email (and later, ticket emails) frequently didn't arrive. Awaiting
+    // here adds roughly 1-2s to the response, but guarantees every email
+    // actually gets attempted. Each call already catches its own errors, so
+    // a failed email/WhatsApp send still can't crash the booking itself.
+    await Promise.all([
+      sendOrderNotificationEmail(order),
+      sendOrderConfirmationEmail(order),
+      sendOrderWhatsAppNotification(order),
+    ]).catch((err) => console.error("[orders] notification failed:", err));
 
-      if (order.merchantId) {
-        await createNotification({
-          recipientType: "merchant",
-          merchantId: order.merchantId,
-          category: "order",
-          title: `Order booked — ${order.trackingId}`,
-          message: `Your shipment to ${order.receiverName} (${order.deliveryCity}) has been booked.`,
-        }).catch(() => null);
-      }
-    })();
+    if (order.merchantId) {
+      await createNotification({
+        recipientType: "merchant",
+        merchantId: order.merchantId,
+        category: "order",
+        title: `Order booked — ${order.trackingId}`,
+        message: `Your shipment to ${order.receiverName} (${order.deliveryCity}) has been booked.`,
+      }).catch(() => null);
+    }
 
     return NextResponse.json({ order }, { status: 201 });
   } catch (err) {
