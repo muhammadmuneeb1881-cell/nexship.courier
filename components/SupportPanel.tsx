@@ -10,6 +10,8 @@ import {
   Mail,
   HelpCircle,
   CheckCircle2,
+  Copy,
+  Check,
 } from "lucide-react";
 
 const SUPPORT_PHONE = process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+923122347756";
@@ -64,18 +66,18 @@ export default function SupportPanel() {
             >
               <Ticket className="h-4 w-4 text-accent" strokeWidth={1.75} /> Create Ticket
             </button>
-            <a
+            <ContactRow
+              icon={<Phone className="h-4 w-4 text-accent" strokeWidth={1.75} />}
+              label="Call Support"
+              value={SUPPORT_PHONE}
               href={`tel:${SUPPORT_PHONE}`}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm text-white transition-colors hover:bg-white/[0.06]"
-            >
-              <Phone className="h-4 w-4 text-accent" strokeWidth={1.75} /> Call Support
-            </a>
-            <a
+            />
+            <ContactRow
+              icon={<Mail className="h-4 w-4 text-accent" strokeWidth={1.75} />}
+              label="Email Support"
+              value={SUPPORT_EMAIL}
               href={`mailto:${SUPPORT_EMAIL}`}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm text-white transition-colors hover:bg-white/[0.06]"
-            >
-              <Mail className="h-4 w-4 text-accent" strokeWidth={1.75} /> Email Support
-            </a>
+            />
             <a
               href="/help"
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 font-body text-sm text-white transition-colors hover:bg-white/[0.06]"
@@ -98,6 +100,58 @@ export default function SupportPanel() {
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * A support-menu row that both (a) tries to open the native phone/mail app
+ * via the href, and (b) offers a copy button as a fallback for desktop /
+ * Chromebook users who don't have a default phone or mail app configured —
+ * on those devices tel:/mailto: links silently do nothing, so without this
+ * the button can look "broken" even though it's working as designed.
+ */
+function ContactRow({
+  icon,
+  label,
+  value,
+  href,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  href: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard API unavailable — fall back to letting the tel:/mailto: link work.
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.06]">
+      <a href={href} className="flex flex-1 items-center gap-3 font-body text-sm text-white">
+        {icon}
+        <span className="flex flex-col">
+          {label}
+          <span className="font-body text-[11px] text-muted">{value}</span>
+        </span>
+      </a>
+      <button
+        type="button"
+        onClick={handleCopy}
+        aria-label={`Copy ${label.toLowerCase()}`}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:text-white"
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2} /> : <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />}
+      </button>
+    </div>
   );
 }
 
