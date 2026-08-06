@@ -383,19 +383,6 @@ export async function getOrdersByMerchant(merchantId: string): Promise<Order[]> 
     .eq("merchant_id", merchantId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-
-  // TEMPORARY DEBUG LOG — remove after diagnosing the stale-status issue.
-  // Prints exactly what Supabase returned, before any mapping, so we can
-  // see in Vercel logs whether the DB read itself is stale.
-  console.log(
-    "[DEBUG getOrdersByMerchant] merchantId:",
-    merchantId,
-    "raw rows from Supabase:",
-    JSON.stringify(
-      (data || []).map((r: any) => ({ tracking_id: r.tracking_id, status: r.status, id: r.id }))
-    )
-  );
-
   return (data || []).map(rowToOrder);
 }
 
