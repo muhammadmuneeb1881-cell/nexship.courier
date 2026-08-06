@@ -157,7 +157,7 @@ export default function MerchantDashboard() {
       const [meRes, ordersRes, notifRes] = await Promise.all([
         fetch("/api/merchant/me", { cache: "no-store" }),
         fetch("/api/merchant/orders", { cache: "no-store" }),
-        fetch("/api/notifications", { cache: "no-store" }),
+        fetch("/api/merchant/notifications", { cache: "no-store" }),
       ]);
       if (meRes.status === 401) {
         router.push("/merchant/login");
@@ -205,7 +205,7 @@ export default function MerchantDashboard() {
 
   const markAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    await fetch("/api/notifications", {
+    await fetch("/api/merchant/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "mark-all-read" }),
