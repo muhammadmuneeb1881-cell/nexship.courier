@@ -18,6 +18,8 @@ export interface SlipOrder {
   packageType: string;
   weightKg: number;
   quantity: number;
+  requiresPickup: boolean;
+  pickupCharges: number;
   deliveryCharges: number;
   parcelValue: number;
   isCod: boolean;
@@ -41,14 +43,20 @@ export function buildSlipHtml(order: SlipOrder): string {
   const created = new Date(order.createdAt);
   const dateStr = isNaN(created.getTime()) ? "" : created.toLocaleString();
 
+  const pickupRow = order.requiresPickup
+    ? `<div class="row"><span>Pickup Charges (Karachi)</span><strong>${money(order.pickupCharges)}</strong></div>`
+    : "";
+
   const amountRows = cod
     ? `
       <div class="row"><span>Parcel / COD Amount</span><strong>${money(order.parcelValue)}</strong></div>
-      <div class="row"><span>Delivery Charges</span><strong>${money(order.deliveryCharges)}</strong></div>
+      <div class="row"><span>Delivery Charges${order.requiresPickup ? " (incl. pickup)" : ""}</span><strong>${money(order.deliveryCharges)}</strong></div>
+      ${pickupRow}
       <div class="row total"><span>Total to Collect from Receiver</span><strong>${money(order.price)}</strong></div>
     `
     : `
-      <div class="row"><span>Delivery Charges</span><strong>${money(order.deliveryCharges)}</strong></div>
+      <div class="row"><span>Delivery Charges${order.requiresPickup ? " (incl. pickup)" : ""}</span><strong>${money(order.deliveryCharges)}</strong></div>
+      ${pickupRow}
       <div class="row total"><span>Total (Prepaid)</span><strong>${money(order.price)}</strong></div>
     `;
 
@@ -112,6 +120,7 @@ export function buildSlipHtml(order: SlipOrder): string {
       <div class="section-title">Package</div>
       <div class="box kv">
         ${esc(order.packageType)} &middot; ${esc(order.weightKg)} kg &middot; Qty ${esc(order.quantity)}
+        <br/>${order.requiresPickup ? `Pickup requested (+${money(order.pickupCharges)})` : "Customer will drop off (no pickup)"}
       </div>
 
       <div class="amounts">
