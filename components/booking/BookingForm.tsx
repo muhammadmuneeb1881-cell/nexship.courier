@@ -2,7 +2,7 @@
 
 import { useState, useEffect, FormEvent } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, CheckCircle2, PackageCheck, Copy, Check, Banknote, Truck, Download } from "lucide-react";
+import { AlertCircle, CheckCircle2, PackageCheck, Copy, Check, Banknote, Truck, Download, MapPin, Store } from "lucide-react";
 import Navbar from "../layout/Navbar";
 import Footer from "../layout/Footer";
 import Container from "../ui/Container";
@@ -10,7 +10,7 @@ import SectionHeading from "../ui/SectionHeading";
 import Button from "../ui/Button";
 import CitySelect from "../shared/CitySelect";
 import CityBadge from "../shared/CityBadge";
-import { CITIES, LIVE_CITY } from "../../lib/cities";
+import { CITIES, LIVE_CITY, PICKUP_CHARGE } from "../../lib/cities";
 import { openSlip } from "../../lib/slip";
 
 interface FormState {
@@ -55,11 +55,14 @@ export default function BookingForm() {
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [requiresPickup, setRequiresPickup] = useState(true);
   const [confirmedOrder, setConfirmedOrder] = useState<{
     trackingId: string;
     createdAt: string;
     deliveryCharges: number;
     parcelValue: number;
+    pickupCharges: number;
+    requiresPickup: boolean;
     isCod: boolean;
     price: number;
   } | null>(null);
@@ -80,12 +83,13 @@ export default function BookingForm() {
   const weightNum = parseFloat(values.weightKg) || 0;
   const qtyNum = parseInt(values.quantity, 10) || 0;
   const parcelValueNum = parseFloat(values.parcelValue) || 0;
+  const pickupCharges = requiresPickup ? PICKUP_CHARGE : 0;
   const deliveryCharges = pricing
     ? Math.round(
         pricing.baseFee +
           pricing.perKgRate * weightNum * qtyNum +
           (pricing.packageTypeExtra[values.packageType] || 0) * qtyNum
-      )
+      ) + pickupCharges
     : null;
   const codAmount = isCod ? parcelValueNum : 0;
   const totalAmount = deliveryCharges !== null ? deliveryCharges + codAmount : null;
@@ -100,6 +104,7 @@ export default function BookingForm() {
     if (submitted) {
       setValues(INITIAL);
       setOrderType("cod");
+      setRequiresPickup(true);
       setSubmitted(false);
       setConfirmedOrder(null);
       return;
@@ -123,6 +128,7 @@ export default function BookingForm() {
           quantity: qtyNum,
           isCod,
           parcelValue: isCod ? parcelValueNum : 0,
+          requiresPickup,
         }),
       });
       const data = await res.json();
@@ -136,6 +142,8 @@ export default function BookingForm() {
         createdAt: data.order.createdAt,
         deliveryCharges: data.order.deliveryCharges,
         parcelValue: data.order.parcelValue,
+        pickupCharges: data.order.pickupCharges,
+        requiresPickup: data.order.requiresPickup,
         isCod: data.order.isCod,
         price: data.order.price,
       });
@@ -162,6 +170,8 @@ export default function BookingForm() {
       packageType: values.packageType,
       weightKg: weightNum,
       quantity: qtyNum,
+      requiresPickup: confirmedOrder.requiresPickup,
+      pickupCharges: confirmedOrder.pickupCharges,
       deliveryCharges: confirmedOrder.deliveryCharges,
       parcelValue: confirmedOrder.parcelValue,
       isCod: confirmedOrder.isCod,
@@ -242,6 +252,50 @@ export default function BookingForm() {
             </div>
 
             <h3 className="mt-8 font-display text-sm font-semibold uppercase tracking-wider text-muted">
+              Pickup
+            </h3>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setRequiresPickup(true)}
+                className={`flex items-start gap-3 rounded-2xl border px-5 py-4 text-left transition-colors ${
+                  requiresPickup
+                    ? "border-accent/50 bg-accent/[0.08]"
+                    : "border-border bg-white/[0.03] hover:border-white/20"
+                }`}
+              >
+                <Truck className={`mt-0.5 h-5 w-5 shrink-0 ${requiresPickup ? "text-accent" : "text-muted"}`} strokeWidth={1.75} />
+                <span>
+                  <span className="block font-display text-sm font-semibold text-white">
+                    Pickup from my address
+                  </span>
+                  <span className="mt-0.5 block font-body text-xs leading-5 text-muted">
+                    Our rider collects the parcel from you. Rs {PICKUP_CHARGE} flat, anywhere in Karachi.
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRequiresPickup(false)}
+                className={`flex items-start gap-3 rounded-2xl border px-5 py-4 text-left transition-colors ${
+                  !requiresPickup
+                    ? "border-sky-400/50 bg-sky-400/[0.08]"
+                    : "border-border bg-white/[0.03] hover:border-white/20"
+                }`}
+              >
+                <Store className={`mt-0.5 h-5 w-5 shrink-0 ${!requiresPickup ? "text-sky-300" : "text-muted"}`} strokeWidth={1.75} />
+                <span>
+                  <span className="block font-display text-sm font-semibold text-white">
+                    I&apos;ll drop it off myself
+                  </span>
+                  <span className="mt-0.5 block font-body text-xs leading-5 text-muted">
+                    No pickup fee — bring the parcel to our office yourself.
+                  </span>
+                </span>
+              </button>
+            </div>
+
+            <h3 className="mt-8 font-display text-sm font-semibold uppercase tracking-wider text-muted">
               Sender Details
             </h3>
             <div className="mt-4 grid gap-5 sm:grid-cols-2">
@@ -270,10 +324,16 @@ export default function BookingForm() {
               <div className="sm:col-span-2">
                 <FloatingField
                   id="pickupAddress"
-                  label="Pickup Address (Karachi)"
+                  label={requiresPickup ? "Pickup Address (Karachi)" : "Your Address (Karachi)"}
                   value={values.pickupAddress}
                   onChange={(v) => update("pickupAddress", v)}
                 />
+                <p className="mt-1.5 flex items-center gap-1.5 font-body text-[11px] leading-4 text-muted">
+                  <MapPin className="h-3 w-3 shrink-0" strokeWidth={1.75} />
+                  {requiresPickup
+                    ? "Our rider will collect the parcel from this address."
+                    : "For our records — you'll drop the parcel off at our office."}
+                </p>
               </div>
             </div>
 
@@ -381,6 +441,12 @@ export default function BookingForm() {
                   <p className="font-body text-xs text-white/70 sm:text-sm">Delivery Charges</p>
                   <p className="font-body text-sm font-medium text-white">Rs {deliveryCharges.toLocaleString()}</p>
                 </div>
+                {requiresPickup && (
+                  <div className="flex items-center justify-between">
+                    <p className="font-body text-xs text-white/70 sm:text-sm">— incl. Pickup Charges (Karachi)</p>
+                    <p className="font-body text-sm font-medium text-white">Rs {pickupCharges.toLocaleString()}</p>
+                  </div>
+                )}
                 <div className="flex items-center justify-between border-t border-accent/15 pt-2">
                   <p className="font-body text-xs text-white/90 sm:text-sm">
                     {isCod ? "Total to Collect from Receiver" : "Total (Prepaid)"}
