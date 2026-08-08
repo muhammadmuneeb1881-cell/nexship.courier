@@ -1,4 +1,5 @@
 import { getSupabaseAdminClient } from "./supabase";
+import { PICKUP_CHARGE } from "./cities";
 
 export type OrderStatus = "Pending" | "Picked Up" | "In Transit" | "Delivered" | "Cancelled";
 
@@ -17,7 +18,11 @@ export interface Order {
   packageType: string;
   weightKg: number;
   quantity: number;
-  /** Delivery service fee only (weight/quantity/package-type based). */
+  /** true = customer wants NexShip to collect the parcel from pickupAddress (+ pickupCharges). false = customer will drop it off themselves. */
+  requiresPickup: boolean;
+  /** Flat pickup fee (PICKUP_CHARGE) when requiresPickup is true, else 0. Already included inside deliveryCharges. */
+  pickupCharges: number;
+  /** Delivery service fee (weight/quantity/package-type based) + pickupCharges when requested. */
   deliveryCharges: number;
   /** Value of the parcel to collect from the receiver. 0 when isCod is false. */
   parcelValue: number;
@@ -89,6 +94,8 @@ function rowToOrder(row: any): Order {
     packageType: row.package_type,
     weightKg: Number(row.weight_kg),
     quantity: Number(row.quantity),
+    requiresPickup: row.requires_pickup != null ? Boolean(row.requires_pickup) : true,
+    pickupCharges: row.pickup_charges != null ? Number(row.pickup_charges) : 0,
     deliveryCharges: row.delivery_charges != null ? Number(row.delivery_charges) : Number(row.price),
     parcelValue: row.parcel_value != null ? Number(row.parcel_value) : 0,
     isCod: row.is_cod != null ? Boolean(row.is_cod) : true,
@@ -117,6 +124,8 @@ function orderToRow(order: Order) {
     package_type: order.packageType,
     weight_kg: order.weightKg,
     quantity: order.quantity,
+    requires_pickup: order.requiresPickup,
+    pickup_charges: order.pickupCharges,
     delivery_charges: order.deliveryCharges,
     parcel_value: order.parcelValue,
     is_cod: order.isCod,
@@ -279,8 +288,9 @@ export async function setPricing(config: PricingConfig): Promise<PricingConfig> 
 }
 
 // Computes the delivery service fee only (based on weight/quantity/package
-// type). This is the same calculation used before COD support was added —
-// kept under its original name so existing callers keep working.
+// type). Does NOT include the pickup fee — use calculateOrderAmounts for the
+// full breakdown. Kept under its original name so existing callers keep
+// working.
 export async function calculatePrice(params: {
   weightKg: number;
   quantity: number;
@@ -294,9 +304,10 @@ export async function calculatePrice(params: {
 }
 
 /**
- * Full price breakdown for a booking: delivery charges (service fee),
- * parcel value (COD collection amount, 0 for Normal/Prepaid bookings) and
- * the total amount to be received from the customer.
+ * Full price breakdown for a booking: delivery charges (service fee, which
+ * includes the flat pickup fee when requested), parcel value (COD
+ * collection amount, 0 for Normal/Prepaid bookings), the pickup fee itself,
+ * and the total amount to be received from the customer.
  */
 export async function calculateOrderAmounts(params: {
   weightKg: number;
@@ -304,10 +315,13 @@ export async function calculateOrderAmounts(params: {
   packageType: string;
   isCod: boolean;
   parcelValue: number;
-}): Promise<{ deliveryCharges: number; parcelValue: number; total: number }> {
-  const deliveryCharges = await calculatePrice(params);
+  requiresPickup: boolean;
+}): Promise<{ deliveryCharges: number; parcelValue: number; pickupCharges: number; total: number }> {
+  const baseDeliveryCharges = await calculatePrice(params);
+  const pickupCharges = params.requiresPickup ? PICKUP_CHARGE : 0;
+  const deliveryCharges = baseDeliveryCharges + pickupCharges;
   const parcelValue = params.isCod ? Math.round(params.parcelValue) : 0;
-  return { deliveryCharges, parcelValue, total: deliveryCharges + parcelValue };
+  return { deliveryCharges, parcelValue, pickupCharges, total: deliveryCharges + parcelValue };
 }
 
 // ---- INQUIRIES ----
