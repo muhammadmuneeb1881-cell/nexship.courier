@@ -24,6 +24,7 @@ type ValidatedOrder = Omit<
   | "trackingId"
   | "createdAt"
   | "deliveryCharges"
+  | "pickupCharges"
   | "price"
   | "status"
   | "merchantId"
@@ -80,6 +81,11 @@ function validateRow(row: RawRow, rowNumber: number): { error: string } | { orde
     }
   }
 
+  // Optional column — bulk sheets that don't include it default to no
+  // pickup requested (merchants typically drop bulk shipments off).
+  const requiresPickupRaw = (row.requiresPickup ?? row.pickup ?? "").toString().trim().toLowerCase();
+  const requiresPickup = ["pickup", "true", "yes", "1"].includes(requiresPickupRaw);
+
   return {
     order: {
       senderName: row.senderName.trim(),
@@ -95,6 +101,7 @@ function validateRow(row: RawRow, rowNumber: number): { error: string } | { orde
       quantity: qty,
       isCod,
       parcelValue,
+      requiresPickup,
     },
   };
 }
@@ -142,12 +149,13 @@ export async function POST(req: NextRequest) {
 
   const created: Order[] = [];
   for (const { order: partial } of validated) {
-    const { deliveryCharges, parcelValue, total: price } = await calculateOrderAmounts({
+    const { deliveryCharges, parcelValue, pickupCharges, total: price } = await calculateOrderAmounts({
       weightKg: partial.weightKg,
       quantity: partial.quantity,
       packageType: partial.packageType,
       isCod: partial.isCod,
       parcelValue: partial.parcelValue,
+      requiresPickup: partial.requiresPickup,
     });
     const trackingId = await generateTrackingId();
     const order: Order = {
@@ -157,6 +165,7 @@ export async function POST(req: NextRequest) {
       createdAt: new Date().toISOString(),
       deliveryCharges,
       parcelValue,
+      pickupCharges,
       price,
       status: "Pending",
       merchantId: session.merchantId!,
