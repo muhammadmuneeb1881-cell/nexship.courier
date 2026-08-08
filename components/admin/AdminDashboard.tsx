@@ -40,6 +40,8 @@ interface Order {
   packageType: string;
   weightKg: number;
   quantity: number;
+  requiresPickup: boolean;
+  pickupCharges: number;
   deliveryCharges: number;
   parcelValue: number;
   isCod: boolean;
@@ -65,11 +67,25 @@ function handleSlip(o: Order) {
     packageType: o.packageType,
     weightKg: o.weightKg,
     quantity: o.quantity,
+    requiresPickup: o.requiresPickup,
+    pickupCharges: o.pickupCharges,
     deliveryCharges: o.deliveryCharges,
     parcelValue: o.parcelValue,
     isCod: o.isCod,
     price: o.price,
   });
+}
+
+function PickupBadge({ requiresPickup }: { requiresPickup: boolean }) {
+  return requiresPickup ? (
+    <span className="rounded-lg border border-accent/25 bg-accent/10 px-2.5 py-1 font-body text-[11px] font-medium text-accent">
+      Pickup
+    </span>
+  ) : (
+    <span className="rounded-lg border border-white/15 bg-white/[0.04] px-2.5 py-1 font-body text-[11px] font-medium text-muted">
+      Drop-off
+    </span>
+  );
 }
 
 function DeliveryTypeBadge({ isCod }: { isCod: boolean }) {
@@ -612,6 +628,7 @@ function OrdersTab({
                 "Date",
                 "Sender",
                 "Pickup Address",
+                "Pickup",
                 "Receiver",
                 "Delivery Address",
                 "City",
@@ -633,7 +650,7 @@ function OrdersTab({
           <tbody className="divide-y divide-border">
             {orders.length === 0 ? (
               <tr>
-                <td colSpan={15} className="px-4 py-10 text-center font-body text-sm text-muted">
+                <td colSpan={16} className="px-4 py-10 text-center font-body text-sm text-muted">
                   <Package className="mx-auto mb-2 h-6 w-6 text-muted" strokeWidth={1.5} />
                   No orders found.
                 </td>
@@ -653,6 +670,9 @@ function OrdersTab({
                     {o.senderEmail && <div className="text-muted">{o.senderEmail}</div>}
                   </td>
                   <td className="max-w-[180px] px-4 py-3 font-body text-xs text-muted">{o.pickupAddress}</td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <PickupBadge requiresPickup={o.requiresPickup} />
+                  </td>
                   <td className="px-4 py-3 font-body text-xs text-white">
                     <div className="font-medium">{o.receiverName}</div>
                     <div className="text-muted">{o.receiverPhone}</div>
