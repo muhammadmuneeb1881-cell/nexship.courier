@@ -35,6 +35,8 @@ interface Order {
   packageType: string;
   weightKg: number;
   quantity: number;
+  requiresPickup: boolean;
+  pickupCharges: number;
   deliveryCharges: number;
   parcelValue: number;
   isCod: boolean;
@@ -138,6 +140,8 @@ export default function MerchantDashboard() {
       packageType: o.packageType,
       weightKg: o.weightKg,
       quantity: o.quantity,
+      requiresPickup: o.requiresPickup,
+      pickupCharges: o.pickupCharges,
       deliveryCharges: o.deliveryCharges,
       parcelValue: o.parcelValue,
       isCod: o.isCod,
