@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
     quantity,
     isCod,
     parcelValue,
+    requiresPickup,
   } = body;
 
   const requiredStrings = {
@@ -90,6 +91,12 @@ export async function POST(req: NextRequest) {
   // COD (Cash on Delivery) vs Normal (Prepaid) booking. Defaults to COD to
   // stay backwards-compatible with any older client that doesn't send it.
   const codBooking = isCod === undefined ? true : Boolean(isCod);
+
+  // Pickup from the sender's address (+ flat PICKUP_CHARGE, anywhere in
+  // Karachi). Defaults to true to stay backwards-compatible with any older
+  // client that doesn't send it — pickup was implicitly always offered
+  // before this option existed.
+  const pickupRequested = requiresPickup === undefined ? true : Boolean(requiresPickup);
   const rawParcelValue = codBooking ? Number(parcelValue) : 0;
   if (codBooking && (!Number.isFinite(rawParcelValue) || rawParcelValue < 0 || rawParcelValue > 10_000_000)) {
     return NextResponse.json({ error: "Invalid parcel value" }, { status: 400 });
@@ -105,12 +112,13 @@ export async function POST(req: NextRequest) {
   // and return a clear JSON error so both the browser and Vercel logs show
   // what actually went wrong.
   try {
-    const { deliveryCharges, parcelValue: codAmount, total: price } = await calculateOrderAmounts({
+    const { deliveryCharges, parcelValue: codAmount, pickupCharges, total: price } = await calculateOrderAmounts({
       weightKg: weight,
       quantity: qty,
       packageType,
       isCod: codBooking,
       parcelValue: rawParcelValue,
+      requiresPickup: pickupRequested,
     });
     const trackingId = await generateTrackingId();
 
@@ -134,6 +142,8 @@ export async function POST(req: NextRequest) {
       packageType,
       weightKg: weight,
       quantity: qty,
+      requiresPickup: pickupRequested,
+      pickupCharges,
       deliveryCharges,
       parcelValue: codAmount,
       isCod: codBooking,
