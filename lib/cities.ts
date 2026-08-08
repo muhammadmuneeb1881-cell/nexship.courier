@@ -30,3 +30,10 @@ export const COMING_SOON_CITIES = CITIES.filter((c) => c.status === "coming-soon
 
 export const KARACHI_NOTICE =
   "We currently provide courier services only within Karachi. Expansion to other cities across Pakistan is coming soon.";
+
+// Flat pickup fee charged when a customer asks NexShip to collect the
+// parcel from their address instead of dropping it off themselves.
+// Same flat rate everywhere in Karachi. Single source of truth — imported
+// by both the client-side booking form (for the live price preview) and
+// the server (lib/store.ts) so the two never drift apart.
+export const PICKUP_CHARGE = 150;
