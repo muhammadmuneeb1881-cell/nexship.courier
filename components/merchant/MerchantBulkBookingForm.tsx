@@ -26,6 +26,7 @@ const SAMPLE_HEADERS = [
   "quantity",
   "isCod",
   "parcelValue",
+  "requiresPickup",
 ];
 
 const SAMPLE_ROW = [
@@ -42,6 +43,7 @@ const SAMPLE_ROW = [
   "1",
   "COD",
   "1500",
+  "Pickup",
 ];
 
 // Minimal RFC4180-ish CSV parser — handles quoted fields with commas.
