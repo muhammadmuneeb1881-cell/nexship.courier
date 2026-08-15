@@ -12,6 +12,7 @@ import CitySelect from "../shared/CitySelect";
 import CityBadge from "../shared/CityBadge";
 import { CITIES, LIVE_CITY, PICKUP_CHARGE } from "../../lib/cities";
 import { openSlip } from "../../lib/slip";
+import { computeWeightCharge } from "../../lib/pricing";
 
 interface FormState {
   senderName: string;
@@ -87,7 +88,7 @@ export default function BookingForm() {
   const deliveryCharges = pricing
     ? Math.round(
         pricing.baseFee +
-          pricing.perKgRate * weightNum * qtyNum +
+          computeWeightCharge(weightNum) * qtyNum +
           (pricing.packageTypeExtra[values.packageType] || 0) * qtyNum
       ) + pickupCharges
     : null;
