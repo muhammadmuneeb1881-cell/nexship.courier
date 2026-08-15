@@ -832,49 +832,45 @@ function PricingTab({
   pricing: PricingConfig;
   onSaved: (p: PricingConfig) => void;
 }) {
-  const [perKgRate, setPerKgRate] = useState(pricing.perKgRate);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
-
-  // Base fee and per-package-type extras are locked to 0 so every shipment is
-  // priced as a flat "Rs X per kg" amount, regardless of package type.
+  // Fixed business rule (not admin-editable): flat Rs 300 for any shipment
+  // up to and including 3kg, plus Rs 100 for every kg above 3kg. Base fee and
+  // per-package-type extras stay locked to 0 — every shipment is priced the
+  // same way regardless of package type.
+  const WEIGHT_THRESHOLD_KG = 3;
+  const FLAT_RATE_UPTO_THRESHOLD = 300;
+  const EXTRA_RATE_PER_KG_ABOVE_THRESHOLD = 100;
   const LOCKED_BASE_FEE = 0;
   const LOCKED_PACKAGE_EXTRA: Record<string, number> = PACKAGE_TYPES.reduce(
     (acc, type) => ({ ...acc, [type]: 0 }),
     {}
   );
 
-  const handleSave = async () => {
-    setSaving(true);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/pricing", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baseFee: LOCKED_BASE_FEE,
-          perKgRate,
-          packageTypeExtra: LOCKED_PACKAGE_EXTRA,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setMessage(data.error || "Failed to save pricing");
-      } else {
-        onSaved(data.pricing);
-        setMessage("Pricing updated successfully.");
-      }
-    } catch {
-      setMessage("Something went wrong. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
+  // Make sure the backend always reflects this fixed rule, even if it was
+  // previously saved with different numbers.
+  useEffect(() => {
+    const needsSync =
+      pricing.baseFee !== LOCKED_BASE_FEE ||
+      pricing.perKgRate !== EXTRA_RATE_PER_KG_ABOVE_THRESHOLD ||
+      PACKAGE_TYPES.some((type) => (pricing.packageTypeExtra[type] || 0) !== 0);
+    if (!needsSync) return;
+    fetch("/api/pricing", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        baseFee: LOCKED_BASE_FEE,
+        perKgRate: EXTRA_RATE_PER_KG_ABOVE_THRESHOLD,
+        packageTypeExtra: LOCKED_PACKAGE_EXTRA,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => data.pricing && onSaved(data.pricing))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Live preview for a 1kg, qty 1 shipment (same for every package type,
-  // since base fee and package-type extras are locked to 0).
-  const previewWeight = 1;
-  const preview = Math.round(perKgRate * previewWeight);
+  const example3kg = FLAT_RATE_UPTO_THRESHOLD;
+  const example5kg =
+    FLAT_RATE_UPTO_THRESHOLD + (5 - WEIGHT_THRESHOLD_KG) * EXTRA_RATE_PER_KG_ABOVE_THRESHOLD;
 
   return (
     <div className="mt-6 max-w-2xl">
@@ -883,30 +879,23 @@ function PricingTab({
           Base Rate
         </h3>
         <p className="mt-1 font-body text-xs text-muted">
-          Every shipment is priced as a flat rate per kg — no base fee, no extra
-          fee for package type. Documents, Parcel, Fragile, Electronics, and
-          Food all cost the same per kg.
+          Every shipment up to and including 3kg costs a flat Rs {FLAT_RATE_UPTO_THRESHOLD}.
+          Above 3kg, every extra kg adds Rs {EXTRA_RATE_PER_KG_ABOVE_THRESHOLD} on top of that.
+          This applies the same way regardless of package type — no base fee,
+          no extra fee for package type.
         </p>
-        <div className="mt-4 grid gap-5 sm:grid-cols-2">
-          <NumberField label="Rate per KG (Rs)" value={perKgRate} onChange={setPerKgRate} />
+
+        <div className="mt-4 space-y-2 rounded-xl border border-accent/25 bg-accent/[0.06] px-4 py-3 font-body text-xs text-white/90">
+          <p>
+            Example: a shipment of 3kg or less costs{" "}
+            <span className="font-semibold text-accent">Rs {example3kg.toLocaleString()}</span>
+          </p>
+          <p>
+            Example: a 5kg shipment costs Rs {FLAT_RATE_UPTO_THRESHOLD} + (2 × Rs{" "}
+            {EXTRA_RATE_PER_KG_ABOVE_THRESHOLD}) ={" "}
+            <span className="font-semibold text-accent">Rs {example5kg.toLocaleString()}</span>
+          </p>
         </div>
-
-        <div className="mt-6 rounded-xl border border-accent/25 bg-accent/[0.06] px-4 py-3 font-body text-xs text-white/90">
-          Example: a 1kg shipment of any package type would currently cost{" "}
-          <span className="font-semibold text-accent">Rs {preview.toLocaleString()}</span>
-        </div>
-
-        {message && (
-          <p className="mt-4 font-body text-xs text-muted">{message}</p>
-        )}
-
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="mt-6 rounded-xl bg-accent px-5 py-2.5 font-display text-sm font-semibold text-[#050505] transition-opacity hover:opacity-90 disabled:opacity-60"
-        >
-          {saving ? "Saving..." : "Save Pricing"}
-        </button>
       </div>
     </div>
   );
