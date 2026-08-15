@@ -20,7 +20,7 @@ If the customer asks something that is NOT covered by the information below, or 
 
 Do not try to guess an answer in that case - always use the exact fallback message above.
 
-Pricing questions: if a customer gives you weight, quantity and package type, calculate the price yourself using the LIVE PRICING RATES below: price = baseFee + (perKgRate x weightKg x quantity) + (packageTypeExtra x quantity). Show your answer in Rs (PKR).
+Pricing questions: if a customer gives you weight, quantity and package type, calculate the price yourself using the LIVE PRICING RATES below. For EACH package: if its weight is 3kg or less, its weight charge is a flat Rs 300. If its weight is above 3kg, its weight charge is Rs 300 + (Rs 100 x (weightKg - 3)). Then: price = baseFee + (weight charge x quantity) + (packageTypeExtra x quantity). Show your answer in Rs (PKR).
 
 Booking questions: if a customer wants to book a delivery, tell them to use the Booking page on the website (or collect Sender Name, Sender Phone, Pickup Address, Receiver Name, Receiver Phone, Delivery City, Delivery Address, Package Type, Weight, Quantity, and let them know the exact price and tracking ID are generated when they submit the booking form on the website).
 
@@ -40,11 +40,11 @@ export async function POST(req: NextRequest) {
 
     // --- Live pricing (always fresh from the store, admin can change rates) ---
     const pricing = await getPricing();
-    const pricingSection = `\n=== LIVE PRICING RATES (use these exact numbers, in PKR) ===\nBase fee: Rs ${pricing.baseFee}\nPer kg rate: Rs ${pricing.perKgRate} per kg (multiplied by weight and quantity)\nExtra fee by package type (multiplied by quantity):\n${Object.entries(
+    const pricingSection = `\n=== LIVE PRICING RATES (use these exact numbers, in PKR) ===\nBase fee: Rs ${pricing.baseFee}\nWeight charge per package: Rs 300 flat for weight up to and including 3kg. For weight above 3kg: Rs 300 + (Rs 100 x (weightKg - 3)).\nExtra fee by package type (multiplied by quantity):\n${Object.entries(
       pricing.packageTypeExtra
     )
       .map(([type, extra]) => `- ${type}: Rs ${extra}`)
-      .join("\n")}\nFormula: total = baseFee + (perKgRate x weightKg x quantity) + (packageTypeExtra x quantity)\n`;
+      .join("\n")}\nFormula: total = baseFee + (weight charge x quantity) + (packageTypeExtra x quantity)\n`;
 
     // --- Live tracking lookup (real orders from the actual order database) ---
     const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
