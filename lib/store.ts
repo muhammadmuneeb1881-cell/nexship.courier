@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "./supabase";
 import { PICKUP_CHARGE } from "./cities";
+import { computeWeightCharge } from "./pricing";
 
 export type OrderStatus = "Pending" | "Picked Up" | "In Transit" | "Delivered" | "Cancelled";
 
@@ -298,8 +299,8 @@ export async function calculatePrice(params: {
 }): Promise<number> {
   const pricing = await getPricing();
   const extra = pricing.packageTypeExtra[params.packageType] ?? 0;
-  const total =
-    pricing.baseFee + pricing.perKgRate * params.weightKg * params.quantity + extra * params.quantity;
+  const weightCharge = computeWeightCharge(params.weightKg);
+  const total = pricing.baseFee + weightCharge * params.quantity + extra * params.quantity;
   return Math.round(total);
 }
 
